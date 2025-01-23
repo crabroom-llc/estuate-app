@@ -1,6 +1,8 @@
 import '@ant-design/v5-patch-for-react-19';
 import { message } from 'antd';
 
+const token = localStorage.getItem('token');
+
 const addUser = async (user: any) => {
     const response = await fetch('/api/mongo/add-user', {
         method: 'POST',
