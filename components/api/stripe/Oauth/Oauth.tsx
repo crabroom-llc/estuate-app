@@ -4,7 +4,8 @@ import { message } from "antd";
 import { getCookie, setCookie } from "@/utils/cookies";
 
 const token = getCookie(null,'token');
-const userid="iiwww";
+const userId = getCookie(null,'id');
+
 
 
 const stripeAccesscode = async () => {
@@ -40,9 +41,9 @@ const stripeAccesscode = async () => {
   
 
 const generateAccessCode = async (code) => {
-  const response = await fetch("/api/stripe/aouth", {
+  const response = await fetch("/api/stripe/oauth", {
     method: "POST",
-    body: JSON.stringify({ code, userid }),
+    body: JSON.stringify({ code, userId }),
     headers: {
       "Content-Type": "application/json",
       Authorization: `Bearer ${token}`,
