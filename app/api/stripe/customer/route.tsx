@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import jwt from "jsonwebtoken";
+import privateRoute from '@/utils/privateRoute';
 
 // Stripe API endpoint and credentials
 const STRIPE_API_URL = "https://api.stripe.com/v1";
@@ -19,7 +20,7 @@ async function validateToken(request: Request) {
 
         // Return decoded token if valid
         return decoded;
-    } catch (error:any) {
+    } catch (error: any) {
         if (error.name === "JsonWebTokenError") {
             throw new Error("Invalid token");
         } else if (error.name === "TokenExpiredError") {
@@ -33,7 +34,7 @@ async function validateToken(request: Request) {
 export async function POST(request: Request) {
     try {
         // Validate the JWT token
-        // const userData = await validateToken(request);
+        const userData = await privateRoute(request);
 
         // Parse the request body to get the refresh token and customer data
         const { refresh_token, customerData } = await request.json();

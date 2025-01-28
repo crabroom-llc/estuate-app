@@ -13,16 +13,16 @@ const privateRoute = async (req) => {
         if (!decoded) {
             throw new Error('Access Denied');
         }
-        const user = await query('SELECT * FROM users WHERE id = ?', decoded.id)[0];
+        const user = await query('SELECT * FROM users WHERE id = ?', [decoded.id]);
         if (!user) {
             throw new Error('Access Denied');
         }
-        req.user = user;
-        return user;
+        req.user = user[0];
+        return user[0];
     }
     catch (error) {
         console.log(error);
-        res.status(500).json({ message: error.message });
+        throw new Error('Access Denied');
     }
 };
 
