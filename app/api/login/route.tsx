@@ -25,7 +25,7 @@ export async function POST(request: Request) {
         }
 
         // create a token
-        const token = jwt.sign({ email: userExists.email }, process.env.JWT_SECRET, { expiresIn: '1h' });
+        const token = jwt.sign({ email: userExists.email }, process.env.JWT_SECRET, { expiresIn: '1d' });
 
         // save the token
         userExists.token = token;
