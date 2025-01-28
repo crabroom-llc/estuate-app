@@ -2,6 +2,7 @@ import '@ant-design/v5-patch-for-react-19';
 import React, { useState } from 'react'
 import { login } from '../api/user';
 import { message, Button } from 'antd';
+import {gettoken, settoken} from '@/utils/cookies';
 
 const LoginForm = () => {
 
@@ -20,7 +21,7 @@ const LoginForm = () => {
         try {
             setLoading(true);
             const loginUser = await login(userObj);
-            localStorage.setItem('token', loginUser.token);
+            settoken(null, loginUser.token);
             // remove token from the response
             loginUser.token = undefined;
             localStorage.setItem('user', JSON.stringify(loginUser));
@@ -30,6 +31,9 @@ const LoginForm = () => {
         } catch (error) {
             setLoading(false);
             console.log(error);
+        }
+        finally{
+            setLoading(false);
         }
     }
 

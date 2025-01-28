@@ -8,19 +8,36 @@ const SignUpForm = () => {
     const [loading, setLoading] = useState(false);
 
     const handleFormSubmit = async (e: any) => {
-        e.preventDefault()
+        e.preventDefault();
+    
         const userObj = {
             firstName: e.target.firstName.value,
             lastName: e.target.lastName.value,
             email: e.target.email.value,
-            password: e.target.password.value
+            password: e.target.password.value,
+        };
+    
+        setLoading(true); // Show loading state
+    
+        try {
+            // Attempt to add the user
+            const signUpUser = await addUser(userObj);
+    
+            // Success message
+            message.success('User registered successfully', 5);
+    
+            // Redirect to login page
+            window.location.href = '/login';
+        } catch (error: any) {
+            // Handle errors gracefully
+            console.error('Error registering user:', error);
+            message.error(error.message || 'An error occurred during registration', 5);
+        } finally {
+            // Cleanup logic (e.g., hide loading spinner)
+            setLoading(false);
         }
-        setLoading(true);
-        const signUpUser = await addUser(userObj);
-        message.success('User registered successfully', 5);
-        setLoading(false);
-        window.location.href = '/login';
-    }
+    };
+    
 
     return (
         <div className='flex flex-col items-center justify-center h-screen'>

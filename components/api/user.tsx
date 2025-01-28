@@ -1,7 +1,8 @@
 import '@ant-design/v5-patch-for-react-19';
 import { message } from 'antd';
+import {gettoken, settoken} from '@/utils/cookies';
 
-const token = localStorage.getItem('token');
+const token = gettoken();
 
 const addUser = async (user: any) => {
     const response = await fetch('/api/mongo/add-user', {
