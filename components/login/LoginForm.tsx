@@ -2,7 +2,7 @@ import '@ant-design/v5-patch-for-react-19';
 import React, { useState } from 'react'
 import { login } from '../api/user';
 import { message, Button } from 'antd';
-import {gettoken, settoken} from '@/utils/cookies';
+import { getCookie, setCookie } from '@/utils/cookies';
 
 const LoginForm = () => {
 
@@ -21,10 +21,14 @@ const LoginForm = () => {
         try {
             setLoading(true);
             const loginUser = await login(userObj);
-            settoken(null, loginUser.token);
+            setCookie(null, 'token', loginUser.token);
             // remove token from the response
             loginUser.token = undefined;
-            localStorage.setItem('user', JSON.stringify(loginUser));
+            Object.keys(loginUser).forEach(key => {
+                if (key !== 'token') {
+                    setCookie(null, key, loginUser[key]);
+                }
+            }); // remove token from the response
             setLoading(false);
             message.success('User logged in successfully', 5);
             window.location.href = '/';
@@ -32,7 +36,7 @@ const LoginForm = () => {
             setLoading(false);
             console.log(error);
         }
-        finally{
+        finally {
             setLoading(false);
         }
     }

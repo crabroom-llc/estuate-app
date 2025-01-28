@@ -2,12 +2,12 @@
 import LoginForm from "@/components/login/LoginForm";
 import '@ant-design/v5-patch-for-react-19';
 import { useEffect } from "react";
-import {gettoken, settoken} from '@/utils/cookies';
+import { getCookie, setCookie } from '@/utils/cookies';
 export default function Home() {
   useEffect(() => {
-    const token =gettoken();
+    const token = getCookie(null, 'token');
     console.log(token);
-    if(token) {
+    if (token) {
       window.location.href = "/";
     }
   }, []);;

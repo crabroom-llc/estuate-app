@@ -2,11 +2,11 @@
 import Image from "next/image";
 import { useEffect } from "react";
 import { Connect } from "@/components/dashboard/connect";
-import {gettoken, settoken} from '@/utils/cookies';
+import {getCookie, setCookie} from '@/utils/cookies';
 
 export default function Home() {
   useEffect(() => {
-    const token = gettoken();;
+    const token = getCookie(null,'token');;
     if(!token) {
       window.location.href = "/login";
     }
