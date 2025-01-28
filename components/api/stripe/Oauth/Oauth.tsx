@@ -4,6 +4,8 @@ import { message } from "antd";
 import { gettoken, settoken } from "@/utils/cookies";
 
 const token = gettoken();
+const userid="iiwww";
+
 
 const stripeAccesscode = async () => {
     try {
@@ -16,7 +18,7 @@ const stripeAccesscode = async () => {
       });
   
       // Log the full response object for debugging
-      console.log("Full Response:", response);
+      // console.log("Full Response:", response);
   
       // Check if the response is successful
       if (!response.ok) {
@@ -25,15 +27,10 @@ const stripeAccesscode = async () => {
   
       // Parse and log the JSON response
       const data = await response.json();
-      console.log("Parsed Response:", data);
-  
+      // console.log("Parsed Response:", data);
+      // console.log(data.url);
       // Check if the `url` field exists
-      if (data.url) {
-        console.log("Stripe OAuth URL:", data.url);
-        return data.url;
-      } else {
-        throw new Error("URL field is missing in the response");
-      }
+      return data;
     } catch (error: any) {
       // Log any errors that occur
       console.error("Error in stripeAccesscode:", error.message);
@@ -42,10 +39,10 @@ const stripeAccesscode = async () => {
   };
   
 
-const stripeRefreshcode = async (code) => {
+const generateAccessCode = async (code) => {
   const response = await fetch("/api/stripe/aouth", {
     method: "POST",
-    body: JSON.stringify({ code }),
+    body: JSON.stringify({ code, userid }),
     headers: {
       "Content-Type": "application/json",
       Authorization: `Bearer ${token}`,
@@ -53,6 +50,7 @@ const stripeRefreshcode = async (code) => {
   });
   const data = await response.json();
   console.log(data);
+  return data.status;
 };
 
-export { stripeAccesscode, stripeRefreshcode };
+export { stripeAccesscode, generateAccessCode };

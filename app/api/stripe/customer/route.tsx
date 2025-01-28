@@ -67,7 +67,7 @@ export async function POST(request: Request) {
         });
 
         const tokenData = await tokenResponse.json();
-
+        console.log(tokenData);
         if (!tokenResponse.ok) {
             return NextResponse.json(
                 {
