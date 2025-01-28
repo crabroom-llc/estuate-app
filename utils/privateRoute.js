@@ -1,23 +1,24 @@
 import jwt from 'jsonwebtoken';
-import UserModel  from '@/mongodb/models/UserModel';
+import { query } from './mysql'
 
 
-const privateRoute = async (req, res, next) => {
+const privateRoute = async (req) => {
     try {
-        const headers = req.header('Authorization');
-        // split the token to get the actual token
+        const headers = req.headers.get('Authorization');
         const token = headers.split(' ')[1];
         if (!token) {
-            return res.status(401).json({ message: 'Unauthorized' });
+            throw new Error('Access Denied');
         }
         const decoded = jwt.verify(token, process.env.JWT_SECRET);
-        const user = await UserModel.findById(decoded._id);
-        // console.log(decoded);
+        if (!decoded) {
+            throw new Error('Access Denied');
+        }
+        const user = await query('SELECT * FROM users WHERE id = ?', decoded.id)[0];
         if (!user) {
-            return res.status(401).json({ message: 'Unauthorized' });
+            throw new Error('Access Denied');
         }
         req.user = user;
-        next();
+        return user;
     }
     catch (error) {
         console.log(error);
