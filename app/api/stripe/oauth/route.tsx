@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import jwt from 'jsonwebtoken';
 import { errorObj, successObj } from "@/utils/responseObj";
-import user from "@/mongodb/models/UserModel";
 
 // Replace with your actual Stripe client credentials
 const STRIPE_CLIENT_ID = process.env.STRIPE_CLIENT_ID;
