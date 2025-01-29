@@ -16,4 +16,4 @@ export const query = async (sql: string, params?: any[]) => {
   return rows;
 };
 
-export default pool;
+export {pool};

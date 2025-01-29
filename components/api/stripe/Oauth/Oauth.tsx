@@ -50,8 +50,8 @@ const generateAccessCode = async (code) => {
     },
   });
   const data = await response.json();
-  console.log(data);
-  return data.status;
+  // console.log(data);
+  return data.success;
 };
 
 export { stripeAccesscode, generateAccessCode };

@@ -18,6 +18,7 @@ const OnboardingSuccessful = () => {
         const code = searchParams.get("code");
         console.log("Authorized code", code);
         const generateCodeStatus = await generateAccessCode(code);
+        console.log(generateCodeStatus);
         if (generateCodeStatus) {
           setGenerateAccessCodeStatus(true);
           return;
