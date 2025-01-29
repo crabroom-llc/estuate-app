@@ -1,10 +1,11 @@
 import { NextResponse } from "next/server";
 import jwt from 'jsonwebtoken';
 import { errorObj, successObj } from "@/utils/responseObj";
+import privateRoute from "@/utils/privateRoute";
 
 // Replace with your actual Stripe client credentials
 const STRIPE_CLIENT_ID = process.env.STRIPE_CLIENT_ID;
-const STRIPE_REDIRECT_URI = process.env.STRIPE_REDIRECT_URI ||  'http://localhost:3000';
+const STRIPE_REDIRECT_URI = process.env.STRIPE_REDIRECT_URI || 'http://localhost:3000';
 const STRIPE_CLIENT_SECRET = process.env.STRIPE_CLIENT_SECRET;
 // Stripe token endpoint
 const STRIPE_TOKEN_URL = "https://connect.stripe.com/oauth/token";
@@ -22,7 +23,7 @@ async function validateToken(request) {
         // console.log(decoded);
         // Return decoded token data if valid
         return decoded;
-    } catch (error :any) {
+    } catch (error: any) {
         // Throw an appropriate error for invalid/expired tokens
         if (error.name === 'JsonWebTokenError') {
             throw new Error('Invalid token');
@@ -37,16 +38,16 @@ async function validateToken(request) {
 export async function GET(request) {
     try {
         // Validate the JWT token
-        // const userData = await validateToken(request);
-        // console.log(userData);
+        const userData = await privateRoute(request);
+        console.log(userData);
         // Generate the Stripe OAuth URL
         const stripeOauthUrl = `https://connect.stripe.com/oauth/authorize?response_type=code&client_id=${STRIPE_CLIENT_ID}&scope=read_write&redirect_uri=${encodeURIComponent(STRIPE_REDIRECT_URI)}`;
         console.log("sending the code", stripeOauthUrl);
         // Send the Stripe OAuth URL as a response
         return NextResponse.json(
-            { message: 'Stripe OAuth URL generated successfully', url:stripeOauthUrl },
+            { message: 'Stripe OAuth URL generated successfully', url: stripeOauthUrl },
         );
-    } catch (error : any) {
+    } catch (error: any) {
         console.error(error.message); // Log error for debugging
 
         // Handle specific error cases for better clarity
@@ -119,8 +120,8 @@ export async function POST(request: Request) {
         // "Insert into user_oauthdeails Values(access_token,refresh_token,stripe_user_id,userId)";
         // Send the access token and other details back
         return NextResponse.json(
-            { message: "Access token retrieved successfully", ...successObj, response:data },
-            
+            { message: "Access token retrieved successfully", ...successObj, response: data },
+
         );
     } catch (error: any) {
         console.error("Error exchanging authorization code:", error.message);

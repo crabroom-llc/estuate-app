@@ -17,12 +17,14 @@ const Connect = () => {
   };
 
   return (
-    <div className="flex flex-col items-center justify-between h-screen">
-      <div>
-        <button onClick={HandleStripebutton}>Stripe</button>
-      </div>
-      <div>
-        <button>Hubspot</button>
+    <div className="flex flex-col items-center justify-center h-screen">
+      <div className="flex flex-col items-center justify-between h-48">
+        <div>
+          <button onClick={HandleStripebutton}>Stripe</button>
+        </div>
+        <div>
+          <button>Hubspot</button>
+        </div>
       </div>
     </div>
   );
