@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import jwt from 'jsonwebtoken';
 import { errorObj, successObj } from "@/utils/responseObj";
 import privateRoute from "@/utils/privateRoute";
+import pool from "@/utils/mysql";
 
 // Replace with your actual Stripe client credentials
 const STRIPE_CLIENT_ID = process.env.STRIPE_CLIENT_ID;
@@ -115,7 +116,30 @@ export async function POST(request: Request) {
         const access_token = data.access_token;
         const refresh_token = data.refresh_token;
         const stripe_user_id = data.stripe_user_id;
-        console.log(userId);
+        //console.log(userId);
+        let connection;
+        try {
+            connection = await pool.getConnection();
+            await connection.beginTransaction(); // Start transaction
+            //console.log("START TRANSACTION");
+            await connection.query(
+                "INSERT INTO user_oauth ( stripe_acc, user_id) VALUES (?, ?)",
+                [stripe_user_id, userId]
+            );
+            await connection.query(
+                "INSERT INTO user_stripe_data (user_id, stripe_access_token, stripe_refresh_token, created_at, updated_at) VALUES (?, ?, ?, NOW(), NOW())",
+                [userId, access_token, refresh_token]
+            );
+
+
+            await connection.commit();
+            connection.release();
+            //console.log("All data inserted successfully!");
+        } catch (error) {
+            await connection.rollback();
+            connection.release();
+            //console.error("Transaction failed, rolled back changes:", error);
+        }
 
         // "Insert into user_oauthdeails Values(access_token,refresh_token,stripe_user_id,userId)";
         // Send the access token and other details back
