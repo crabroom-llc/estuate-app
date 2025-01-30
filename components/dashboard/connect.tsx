@@ -1,32 +1,48 @@
 import "@ant-design/v5-patch-for-react-19";
 import React, { useState } from "react";
-import { login } from "../api/user";
-import { message, Button } from "antd";
+import { Button, Spin } from "antd";
 import { stripeAccesscode } from "../api/stripe/Oauth/Oauth";
+import { LoadingOutlined } from "@ant-design/icons";
 
 const Connect = () => {
-  const HandleStripebutton = async () => {
-    const StripeOauthData = await stripeAccesscode();
-    // console.log(StripeOauthData);
-    if (StripeOauthData.url) {
-      window.location.href = StripeOauthData.url;
-    } else {
-      console.log("URL field is missing in the response");
-      throw new Error("URL field is missing in the response");
+  const [loading, setLoading] = useState(false);
+
+  const handleStripeButton = async () => {
+    setLoading(true);
+    try {
+      const StripeOauthData = await stripeAccesscode();
+      if (StripeOauthData.url) {
+        window.location.href = StripeOauthData.url;
+      } else {
+        console.error("URL field is missing in the response");
+        throw new Error("URL field is missing in the response");
+      }
+    } catch (error) {
+      console.error(error);
+    } finally {
+      setLoading(false);
     }
   };
 
   return (
-    <div className="flex flex-col items-center justify-center h-screen">
-      <div className="flex flex-col items-center justify-between h-48">
-        <div>
-          <button onClick={HandleStripebutton}>Stripe</button>
-        </div>
-        <div>
-          <button>Hubspot</button>
-        </div>
-      </div>
+    <div className="flex flex-col items-center justify-center h-screen space-y-6">
+      <Button 
+        type="primary" 
+        style={{ backgroundColor: "#635BFF", borderColor: "#635BFF" }} 
+        onClick={handleStripeButton} 
+        disabled={loading}
+      >
+        Connect Stripe {loading && <Spin indicator={<LoadingOutlined style={{ fontSize: 16, color: "#FFFFFF" }} spin />} className="ml-2" />}
+      </Button>
+      
+      <Button   
+        type="primary" 
+        style={{ backgroundColor: "#FF7A59", borderColor: "#FF7A59" }}
+      >
+        Connect HubSpot
+      </Button>
     </div>
   );
 };
+
 export { Connect };

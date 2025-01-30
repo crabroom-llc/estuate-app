@@ -8,6 +8,7 @@ import { getCookie, setCookie } from '@/utils/cookies';
 
 const OnboardingSuccessful = () => {
   const [generateAccessCodeStatus, setGenerateAccessCodeStatus] = useState(false);
+  const [screenLoading, setScreenLoading] = useState(true);
   const searchParams = useSearchParams();
   useEffect(() => {
     async function fetchData() {
@@ -19,17 +20,23 @@ const OnboardingSuccessful = () => {
         console.log("Authorized code", code);
         const generateCodeStatus = await generateAccessCode(code);
         console.log(generateCodeStatus);
+        setScreenLoading(false);
         if (generateCodeStatus) {
+          
           setGenerateAccessCodeStatus(true);
           return;
         }
       }
     }
-
     fetchData();
   }, [searchParams]);
   return (
     <div>
+      {screenLoading && (
+        <div className="fixed inset-0 backdrop-blur-sm z-[9999] flex items-center justify-center text-white">
+          <div className="w-10 h-10 border-4 border-solid border-t-transparent rounded-full border-gray-600 animate-spin"></div>
+        </div>
+      )}
       {generateAccessCodeStatus ? (
         <div>
           <h1>Onboarding Successful</h1>
