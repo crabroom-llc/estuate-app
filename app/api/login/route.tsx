@@ -7,9 +7,10 @@ import { errorObj, successObj } from "@/utils/responseObj";
 export async function POST(request: Request) {
     try {
         const data = await request.json();
-
+        console.log(data.email);
         // Check if the user exists
         const users = await query("SELECT * FROM users WHERE email = ?", [data.email]) as any[];
+        console.log(users);
         if (users.length === 0) {
             return NextResponse.json({ message: "Invalid email or password", ...errorObj }, { status: 400 });
         }

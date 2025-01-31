@@ -35,7 +35,10 @@ export async function POST(request: Request) {
     try {
         // Validate the JWT token
         const userData = await privateRoute(request);
-
+        // If privateRoute returns a NextResponse, return it immediately
+        if (userData instanceof NextResponse) {
+            return userData;
+        }
         // Parse the request body to get the refresh token and customer data
         const { refresh_token, customerData } = await request.json();
 
