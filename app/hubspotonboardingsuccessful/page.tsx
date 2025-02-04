@@ -1,5 +1,5 @@
 "use client";
-import { OnboardingSuccessful } from "@/components/dashboard/stripeOnboardingSuccessful";
+import { OnboardingSuccessful } from "@/components/dashboard/hubspotOnboardingSuccessful";
 
 
 export default function successfulOnboarding() {

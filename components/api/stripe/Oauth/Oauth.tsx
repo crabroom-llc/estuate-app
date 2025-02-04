@@ -50,7 +50,7 @@ const generateAccessCode = async (code) => {
     },
   });
   const data = await response.json();
-  // console.log(data);
+  console.log(data.success);
   return data.success;
 };
 
