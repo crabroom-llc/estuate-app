@@ -1,8 +1,4 @@
 import Stripe from "stripe";
-import {
-  fetchHubSpotContact,
-  fetchHubSpotLineItem,
-} from "../hubspotActions/hubspotActions";
 
 const stripeInstance = (stripeAccessToken: string) => {
   return new Stripe(stripeAccessToken, {
@@ -19,14 +15,16 @@ const createStripeCustomer = async (contact, stripeAccessToken, contactId) => {
     });
 
     const customer = await stripe.customers.create({
-      name: `${contact.properties.firstname || ""} ${
-        contact.properties.lastname || ""
-      }`,
+      name: `${contact.properties?.firstname || ""} ${
+        contact.properties?.lastname || ""
+      }`.trim(),
       email: contact.properties.email || "",
       phone: contact.properties.phone || "",
       metadata: {
         hubspot_contact_id: contactId, // ✅ Adding HubSpot Contact ID
         deleted: "false",
+        firstName: contact.properties?.firstname || "",
+        lastName: contact.properties?.lastname || "",
       },
     });
 
@@ -37,6 +35,92 @@ const createStripeCustomer = async (contact, stripeAccessToken, contactId) => {
     return null;
   }
 };
+
+// const updateStripeCustomer = async (
+//   stripeAccessToken,
+//   propertyName,
+//   propertyValue,
+//   customerId
+// ) => {
+//   try {
+//     const stripeUpdateFields = {
+//       firstname: "name",
+//       lastname: "name",
+//       email: "email",
+//       phone: "phone",
+//       company: "metadata.company",
+//       website: "metadata.website",
+//       address: "address.line1",
+//       city: "address.city",
+//       state: "address.state",
+//       zip: "address.postal_code",
+//       country: "address.country",
+//       industry: "metadata.industry",
+//       hubspot_owner_id: "metadata.hubspot_owner_id",
+//       lead_status: "metadata.lead_status",
+//       customer_notes: "metadata.notes",
+//       deleted: "metadata.deleted",
+//       hs_lead_status: "metadata.lead_status",
+//     };
+
+//     let updateData: Record<string, any> = {
+//       metadata: {}, // Ensure metadata exists
+//       address: {}, // Ensure address exists
+//     };
+
+//     const stripe = new Stripe(stripeAccessToken as string, {
+//       apiVersion: "2023-10-16" as Stripe.LatestApiVersion,
+//     });
+
+//     // 🔹 Retrieve the existing customer to get metadata
+//     const existingCustomer = (await stripe.customers.retrieve(
+//       customerId
+//     )) as any;
+
+//     if (!existingCustomer || existingCustomer.deleted) {
+//       console.error("❌ Error: Customer not found or deleted.");
+//       return;
+//     }
+
+//     // Extract current metadata safely
+//     const currentMetadata = existingCustomer.metadata || {};
+//     const currentFirstName = currentMetadata.firstName || "";
+//     const currentLastName = currentMetadata.lastName || {};
+
+//     if (propertyName === "firstname") {
+//       // 🔹 Update name using new first name + existing last name
+//       updateData.name = `${propertyValue} ${currentLastName}`.trim();
+//       updateData.metadata.firstName = propertyValue; // Also update metadata
+//     } else if (propertyName === "lastname") {
+//       // 🔹 Update name using existing first name + new last name
+//       updateData.name = `${currentFirstName} ${propertyValue}`.trim();
+//       updateData.metadata.lastName = propertyValue; // Also update metadata
+//     } else if (propertyName in stripeUpdateFields) {
+//       const stripeField = stripeUpdateFields[propertyName];
+
+//       if (stripeField.startsWith("metadata.")) {
+//         const metadataKey = stripeField.split(".")[1];
+//         updateData.metadata[metadataKey] = propertyValue;
+//       } else if (stripeField.startsWith("address.")) {
+//         updateData.address[stripeField.split(".")[1]] = propertyValue;
+//       } else {
+//         updateData[stripeField] = propertyValue;
+//       }
+//     }
+
+//     // Remove empty objects to avoid errors in the API request
+//     if (Object.keys(updateData.metadata).length === 0)
+//       delete updateData.metadata;
+//     if (Object.keys(updateData.address).length === 0) delete updateData.address;
+//   console.log(JSON.stringify(updateData));
+//     const customerUpdate = await stripe.customers.update(
+//       customerId,
+//       updateData
+//     );
+//   } catch (error) {
+//     console.error("Error updating Stripe customer:", error);
+//   }
+// };
 
 const updateStripeCustomer = async (
   stripeAccessToken,
@@ -63,6 +147,7 @@ const updateStripeCustomer = async (
       customer_notes: "metadata.notes",
       deleted: "metadata.deleted",
       hs_lead_status: "metadata.lead_status",
+      jobtitle: "metadata.metadata",
     };
 
     let updateData: Record<string, any> = {
@@ -70,7 +155,36 @@ const updateStripeCustomer = async (
       address: {}, // Ensure address exists
     };
 
-    if (propertyName in stripeUpdateFields) {
+    const stripe = new Stripe(stripeAccessToken as string, {
+      apiVersion: "2023-10-16" as Stripe.LatestApiVersion,
+    });
+
+    // 🔹 Retrieve the existing customer to get metadata
+    const existingCustomer = (await stripe.customers.retrieve(
+      customerId
+    )) as any;
+
+    if (!existingCustomer || existingCustomer.deleted) {
+      console.error("❌ Error: Customer not found or deleted.");
+      return;
+    }
+
+    // Extract current metadata safely
+    const currentMetadata = existingCustomer.metadata || {};
+    const currentFirstName = currentMetadata.firstName || "";
+    const currentLastName = currentMetadata.lastName || ""; // ✅ Fix: Default to empty string
+
+    if (propertyName === "firstname") {
+      // 🔹 Update name using new first name + existing last name
+      updateData.name = `${propertyValue} ${currentLastName}`.trim();
+      updateData.metadata.firstName = propertyValue; // ✅ Also update metadata
+      updateData.metadata.lastName = currentLastName; // ✅ Ensure last name is not lost
+    } else if (propertyName === "lastname") {
+      // 🔹 Update name using existing first name + new last name
+      updateData.name = `${currentFirstName} ${propertyValue}`.trim();
+      updateData.metadata.firstName = currentFirstName; // ✅ Ensure first name is not lost
+      updateData.metadata.lastName = propertyValue; // ✅ Also update metadata
+    } else if (propertyName in stripeUpdateFields) {
       const stripeField = stripeUpdateFields[propertyName];
 
       if (stripeField.startsWith("metadata.")) {
@@ -83,21 +197,35 @@ const updateStripeCustomer = async (
       }
     }
 
+    // ✅ Ensure metadata includes both firstName and lastName before sending the update
+    if (!updateData.metadata.firstName)
+      updateData.metadata.firstName = currentFirstName;
+    if (!updateData.metadata.lastName)
+      updateData.metadata.lastName = currentLastName;
+
+    // ✅ Log what we're sending to Stripe for debugging
+    console.log(
+      "🔹 Final updateData sent to Stripe:",
+      JSON.stringify(updateData)
+    );
+
     // Remove empty objects to avoid errors in the API request
     if (Object.keys(updateData.metadata).length === 0)
       delete updateData.metadata;
     if (Object.keys(updateData.address).length === 0) delete updateData.address;
 
-    const stripe = new Stripe(stripeAccessToken as string, {
-      apiVersion: "2023-10-16" as Stripe.LatestApiVersion,
-    });
-
+    // 🔹 Perform the update in Stripe
     const customerUpdate = await stripe.customers.update(
       customerId,
       updateData
     );
+
+    console.log(
+      `✅ Successfully updated Stripe customer ${customerId}:`,
+      customerUpdate
+    );
   } catch (error) {
-    console.error("Error updating Stripe customer:", error);
+    console.error("❌ Error updating Stripe customer:", error);
   }
 };
 
@@ -897,7 +1025,7 @@ const createManualInvoice = async (
       customer: customerId,
       amount: Math.round(amount * 100), // Stripe expects amounts in cents
       currency: "usd",
-      description: `Invoice for Deal ID`,
+      description: `Invoice for Deal`,
       metadata: {
         // ✅ Add metadata to individual invoice items
         deal_id: dealId,
@@ -1296,7 +1424,6 @@ const createSubscriptionWithInvoice = async (
 };
 
 //newcode
-
 const deleteStripeCustomer = async (stripeAccessToken, customerId) => {
   try {
     const stripe = new Stripe(stripeAccessToken as string, {
@@ -1352,11 +1479,12 @@ const createStripeCompany = async (company, stripeAccessToken, companyId) => {
         hubspot_company_id: companyId, // ✅ Adding HubSpot Company ID
         industry: company.properties.industry || "",
         type: company.properties.type || "",
-        number_of_employees: company.properties.numberofemployees || "",
-        annual_revenue: company.properties.annualrevenue || "",
-        time_zone: company.properties.timezone || "",
+        numberofemployees: company.properties.numberofemployees || "",
+        annualrevenue: company.properties.annualrevenue || "",
+        timezone: company.properties.timezone || "",
         description: company.properties.description || "",
-        linkedin_url: company.properties.linkedincompanyprofile || "",
+        linkedincompanyprofile: company.properties.linkedincompanyprofile || "",
+        hubspot_owner_id: company.properties.hubspot_owner_id || "",
         deleted: "false",
       },
     });

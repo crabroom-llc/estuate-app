@@ -1,22 +1,24 @@
 import { getTokens } from "@/components/hubspotWebhookActivities/gettokens";
 import {
   fetchDealById,
-  updateHubSpotDeal,
+  updateHubSpotDeal,fetchdealStripedetailById
 } from "@/components/hubspotActions/hubspotActions";
 // import {processHubspotDealCreated} from "@/components/stripeActions/stripeActions";
 import { processStripePayments } from "@/components/stripeActions/stripeActions";
+import { hubspotAccessCode } from "@/components/api/hubspot/Oauth/Oauth";
 
 const dealUpdated = async (portalId, objectId, propertyName, propertyValue) => {
+  const tokens = await getTokens(portalId);
+  if (!tokens) {
+    console.error("❌ Failed to retrieve access tokens.");
+    return;
+  }
+
+  const { new_stripeAccessToken, new_hubspot_access_token } = tokens;
   try {
     if (propertyName == "dealstage" && propertyValue == "closedwon") {
-      const tokens = await getTokens(portalId);
+      
 
-      if (!tokens) {
-        console.error("❌ Failed to retrieve access tokens.");
-        return;
-      }
-
-      const { new_stripeAccessToken, new_hubspot_access_token } = tokens;
       // console.log("✅ Deal created successfully!", new_stripeAccessToken, new_hubspot_access_token);
       const dealData = await fetchDealById(
         objectId,
@@ -46,10 +48,9 @@ const dealUpdated = async (portalId, objectId, propertyName, propertyValue) => {
           "❌ Error: processStripePayments returned null. Cannot update HubSpot."
         );
       }
+      return;
     }
-    else{
-        console.log("better lick next time");
-    }
+    // await fetchdealStripedetailById(objectId, new_hubspot_access_token);
   } catch (error) {}
 };
 

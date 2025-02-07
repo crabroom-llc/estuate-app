@@ -267,12 +267,12 @@ async function processWebhookEvents(parsedBody: any) {
 
           case "contact.propertyChange":
             console.log("✏️ Contact Property Changed Event Detected!");
-            await contactUpdated(
-              portalId,
-              objectId,
-              propertyName,
-              propertyValue
-            );
+            // await contactUpdated(
+            //   portalId,
+            //   objectId,
+            //   propertyName,
+            //   propertyValue
+            // );
             break;
 
           case "product.creation":
@@ -328,10 +328,10 @@ async function processWebhookEvents(parsedBody: any) {
             console.log("✅ Deal Created Event Detected!");
             await dealCreated(portalId, objectId);
             break;
-            
+
           case "deal.propertyChange":
             console.log("✅ Deal Updated Event Detected!");
-            await dealUpdated(portalId, objectId, propertyName, propertyValue);
+            // await dealUpdated(portalId, objectId, propertyName, propertyValue);
             break;
 
             //new code
@@ -342,7 +342,7 @@ async function processWebhookEvents(parsedBody: any) {
   
             case "company.creation":
               console.log("✅ Company Created Event Detected!");
-              // await companyCreated(portalId, objectId);
+              await companyCreated(portalId, objectId);
               break;
   
             case "company.deletion":
@@ -379,7 +379,7 @@ async function processWebhookEvents(parsedBody: any) {
 async function forwardWebhookEvent(eventData: any) {
   try {
     const ngrokURL =
-      "https://558d-2409-40c4-30c3-4bdd-e19f-7c90-e22a-2620.ngrok-free.app/api/webhook/hubspot";
+      "https://97e0-2409-40c4-30c3-4bdd-1cd1-2cb9-f89f-9c82.ngrok-free.app/api/webhook/hubspot";
 
     const response = await fetch(ngrokURL, {
       method: "POST",

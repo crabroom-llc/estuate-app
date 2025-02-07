@@ -1,5 +1,6 @@
 import axios from "axios";
 import { fetchStripePriceDetails } from "@/components/stripeActions/stripeActions";
+import { hubspotAccessCode } from "../api/hubspot/Oauth/Oauth";
 const checkHubSpotProperty = async (hubspotAccessToken) => {
   try {
     const response = await axios.get(
@@ -98,6 +99,26 @@ const updateHubSpotContact = async (
 };
 
 // ✅ Function to Fetch HubSpot Contact
+// const fetchHubSpotContact = async (contactId, hubspotAccessToken) => {
+//   try {
+//     const response = await axios.get(
+//       `https://api.hubapi.com/crm/v3/objects/contacts/${contactId}`,
+//       {
+//         headers: {
+//           Authorization: `Bearer ${hubspotAccessToken}`,
+//           "Content-Type": "application/json",
+//         },
+//       }
+//     );
+//     console.log(response.data);
+//     return response.data;
+//   } catch (error: any) {
+//     console.error("❌ Error fetching contact details:", error.response.data);
+//     return null;
+//   }
+// };
+
+// ✅ Function to Fetch HubSpot Contact with Phone Number & Job Title
 const fetchHubSpotContact = async (contactId, hubspotAccessToken) => {
   try {
     const response = await axios.get(
@@ -107,15 +128,20 @@ const fetchHubSpotContact = async (contactId, hubspotAccessToken) => {
           Authorization: `Bearer ${hubspotAccessToken}`,
           "Content-Type": "application/json",
         },
+        params: {
+          properties: "firstname,lastname,email,phone,jobtitle,createdate,hs_object_id,lastmodifieddate,stripe_customer_id",
+        },
       }
     );
+
     console.log(response.data);
     return response.data;
   } catch (error: any) {
-    console.error("❌ Error fetching contact details:", error.response.data);
+    console.error("❌ Error fetching contact details:", error.response?.data || error.message);
     return null;
   }
 };
+
 
 const fetchHubSpotProducts = async (hubspotAccessToken) => {
   try {
@@ -1079,6 +1105,7 @@ const processHubspotDealCreated = async (
     const dealName = dealData.properties.dealname;
     const amount = parseFloat(dealData.properties.amount) || 0;
     const stripeCustomerIds: string[] = [];
+
     const collectedProducts: {
       stripeProductId: string;
       stripePriceId: string;
@@ -1091,6 +1118,9 @@ const processHubspotDealCreated = async (
     let associatedContacts =
       dealData.associations?.contacts?.results?.map((contact) => contact.id) ||
       [];
+    // let associatedCompanies =
+    //   dealData.associations?.companies?.results?.map((company) => company.id+"company") ||
+    //   [];
 
     let associatedLineItems =
       dealData.associations?.["line items"]?.results?.map((item) => item.id) ||
@@ -1108,6 +1138,18 @@ const processHubspotDealCreated = async (
         }
       }
     }
+
+    // if (associatedCompanies.length > 0) {
+    //   for (const companyId of associatedCompanies) {
+    //     const stripeId = await fetchCompanyStripeId(
+    //       companyId,
+    //       hubspotAccessToken
+    //     );
+    //     if (stripeId && !stripeCustomerIds.includes(stripeId)) {
+    //       stripeCustomerIds.push(stripeId);
+    //     }
+    //   }
+    // }
 
     // ✅ **CASE 1: No Line Items (Invoice for Amount)**
     if (associatedLineItems.length === 0) {
@@ -1424,7 +1466,7 @@ const createHubSpotCompanyProperty = async (hubspotAccessToken) => {
 const fetchHubSpotCompany = async (companyId, hubspotAccessToken) => {
   try {
     const response = await axios.get(
-      `https://api.hubapi.com/crm/v3/objects/companies/${companyId}?properties=annualrevenue,city,domain,createdate,description,name,country,zip,industry,type,numberofemployees,timezone,linkedincompanyprofile,companyOwner`,
+      `https://api.hubapi.com/crm/v3/objects/companies/${companyId}?properties=annualrevenue,city,domain,createdate,description,name,country,zip,industry,type,numberofemployees,timezone,linkedincompanyprofile,hubspot_owner_id`,
       {
         headers: {
           Authorization: `Bearer ${hubspotAccessToken}`,
@@ -1573,6 +1615,87 @@ const updateHubSpotDealPaymentStatus = async (
   }
 };
 
+//
+
+const fetchdealStripedetailById = async (dealId, hubspotAccessToken) => {
+  try {
+    const url = `https://api.hubapi.com/crm/v3/objects/deals/${dealId}`;
+    const response = await axios.get(url, {
+      headers: {
+        Authorization: `Bearer ${hubspotAccessToken}`,
+        "Content-Type": "application/json",
+      },
+      params: {
+        properties: "dealstage,stripe_invoice_id, stripe_subscription_id",
+        associations: "contacts,companies,line_items",
+      },
+    });
+    console.log(JSON.stringify(response.data));
+  } catch (error) {
+    console.log("error is:->" + error);
+  }
+};
+
+
+
+
+
+// ✅ Function to Update Contact in HubSpot in from Stripe
+const updateHubSpotContactFromStripe = async (
+  hubspotContactId: any,
+  updatedValues: any,
+  hubspotAccessToken: any
+) => {
+  try {
+    const response = await axios.patch(
+      `https://api.hubapi.com/crm/v3/objects/contacts/${hubspotContactId}`,
+      {
+        properties: updatedValues,
+      },
+      {
+        headers: {
+          Authorization: `Bearer ${hubspotAccessToken}`,
+          "Content-Type": "application/json",
+        },
+      }
+    )
+    console.log("✅ HubSpot Contact Updated with Stripe ID");
+    return response.data;
+  } catch (error) {
+    console.error("❌ Error updating HubSpot contact:", error);
+  }
+}
+
+// ✅ Function to Update Contact in HubSpot in from Stripe
+const updateHubSpotCompanyFromStripe = async (
+  hubspotCompanyId: any,
+  updatedValues: any,
+  hubspotAccessToken: any
+) => {
+  console.log("🚀 => hubspotCompanyId:", hubspotCompanyId);
+  try {
+    const response = await axios.patch(
+      `https://api.hubapi.com/crm/v3/objects/companies/${hubspotCompanyId}`,
+      {
+        properties: updatedValues,
+      },
+      {
+        headers: {
+          Authorization: `Bearer ${hubspotAccessToken}`,
+          "Content-Type": "application/json",
+        },
+      }
+    )
+    console.log("✅ HubSpot Company Updated with Stripe ID");
+    return response.data;
+  } catch (error: any) {
+    console.error("❌ Error updating HubSpot company:", error);
+  }
+}
+
+
+
+
 export {
   updateHubSpotContact,
   fetchHubSpotContact,
@@ -1587,5 +1710,8 @@ export {
   fetchCompanyStripeId,
   createHubSpotDealPropertyPaymentPaidDate,
   updateHubSpotDeal,
-  updateHubSpotDealPaymentStatus
+  updateHubSpotDealPaymentStatus,
+  fetchdealStripedetailById,
+  updateHubSpotCompanyFromStripe,
+  updateHubSpotContactFromStripe
 };

@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 import { pool } from "@/utils/mysql";
-import { contactCreated } from "@/components/hubspotWebhookActivities/contact/contactCreated";
 import { contactUpdated } from "@/components/hubspotWebhookActivities/contact/contactUpdated";
 import { contactDeleted } from "@/components/hubspotWebhookActivities/contact/contactDeleted";
 import { productCreated } from "@/components/hubspotWebhookActivities/product/productCreated";
@@ -10,6 +9,8 @@ import { companyUpdated } from "@/components/hubspotWebhookActivities/company/co
 import { companyDeleted } from "@/components/hubspotWebhookActivities/company/companyDeleted";
 import { productDeleted } from "@/components/hubspotWebhookActivities/product/productDeleted";
 import { invoicePaid } from "@/components/stripeWebhookActivities/invoice/invoicePaid";
+import { customerUpdate } from "@/components/stripeWebhookActivities/customer/customerUpdate";
+import { companyUpdate } from "@/components/stripeWebhookActivities/company/companyUpdate";
 export async function POST(request: NextRequest) {
     try {
         const parsedBody = await request.json();
@@ -93,19 +94,22 @@ async function processWebhookEvents(event: any) {
                     await invoicePaid(accountId, objectId);
                     break;
 
-                case "contact.deletion":
-                    console.log("🗑️ Contact Deleted Event Detected!");
-                    // await contactDeleted(accountId, objectId);
+                case "customer.updated":
+                    console.log("✏️ Update Event Detected!");
+                    if (event.data.object.metadata.deleted == "false") {
+                        if (event.data.object.metadata.hubspot_contact_id !== undefined) {
+                            await customerUpdate(event.data, accountId, objectId);
+                        } else if (event.data.object.metadata.hubspot_company_id !== undefined) {
+                            await companyUpdate(event.data, accountId, objectId);
+                        }
+                    }
                     break;
 
-                case "contact.propertyChange":
-                    console.log("✏️ Contact Property Changed Event Detected!");
-                    // await contactUpdated(
-                    //   accountId,
-                    //   objectId,
-                    //   propertyName,
-                    //   propertyValue
-                    // );
+                case "product.updated":
+                    console.log("✏️ Product Update Event Detected!");
+                    if (event.data.object.metadata.deleted == "false") {
+                        // await customerUpdate(event.data, accountId, objectId);
+                    }
                     break;
 
                 case "product.creation":
