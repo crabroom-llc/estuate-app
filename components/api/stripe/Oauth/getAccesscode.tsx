@@ -81,7 +81,7 @@ const getStripeAccessTokenWebhook = async (
     console.log(`⏳ Time difference stripe : ${diffInMinutes} minutes`);
     // console.log("🖥️ System Local Time:", new Date().toString());
 
-    if (diffInMinutes > 50) {
+    if (diffInMinutes > 0) {
       console.log("⏳ Stripe access token expired. Refreshing...");
       // Generate a new access token (must await this call)
       const newAccessToken = await getStripeAccessToken(refreshToken);

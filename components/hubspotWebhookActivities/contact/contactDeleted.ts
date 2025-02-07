@@ -1,6 +1,5 @@
 import { getTokens } from "@/components/hubspotWebhookActivities/gettokens";
-import { fetchContactStripeId } from "@/components/hubspotActions/hubspotActions";
-import { updateStripeCustomer } from "@/components/stripeActions/stripeActions";
+import { deleteStripeCustomer, getCustomerStripeId } from "@/components/stripeActions/stripeActions";
 
 const contactDeleted = async (portalId, objectId) => {
   let connection;
@@ -15,18 +14,16 @@ const contactDeleted = async (portalId, objectId) => {
 
     const { new_stripeAccessToken, new_hubspot_access_token } = tokens;
 
-    const stripe_customer_id = await fetchContactStripeId(
+    const stripe_customer_id = await getCustomerStripeId(
       objectId,
-      new_hubspot_access_token
+      new_stripeAccessToken
     );
 
-    const updateCustomer = await updateStripeCustomer(
+    const updateCustomer = await deleteStripeCustomer(
       new_stripeAccessToken,
-      "deleted",
-      "true",
       stripe_customer_id
     );
-    console.log("✅ Stripe Customer Updated:", updateCustomer);
+    console.log("✅ Stripe Customer Deleted:", updateCustomer);
   } catch (error) {
     console.error("❌ Error in contactCreated:", error);
   } finally {

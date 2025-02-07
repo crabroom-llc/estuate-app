@@ -223,7 +223,7 @@ export async function POST(request: Request) {
     }
 
     return NextResponse.json(
-      { message: "Access token retrieved successfully", response: data },
+      { message: "Access token retrieved successfully", response: data, ...successObj },
       { status: 200 }
     );
   } catch (error: any) {

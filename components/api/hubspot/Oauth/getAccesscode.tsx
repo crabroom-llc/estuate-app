@@ -78,7 +78,7 @@ const gethubspotaccesstokenWebhook = async (
     // console.log("📌 Current UTC Time:", currentTime.format());
     console.log(`⏳ Time difference hubspot: ${diffInMinutes} minutes`);
     // console.log("🖥️ System Local Time:", new Date().toString());
-    if (diffInMinutes > 30) {
+    if (diffInMinutes > 0) {
       console.log("HubSpot access token expired. Refreshing...");
       // Generate new access token (Replace this with actual token generation logic)
       const newAccessToken = await gethubspotaccesstoken(refreshToken);

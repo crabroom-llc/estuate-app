@@ -30,9 +30,12 @@ try {
   
   // Extract `productId` before passing it to `updateHubSpotProduct`
   const stripeProductId = stripeProductResponse.productId;
+  const stripePriceId = stripeProductResponse.priceId;
 
-  const updatedProduct = await updateHubSpotProduct(objectId, stripeProductId, new_hubspot_access_token);
+  const updatedProduct = await updateHubSpotProduct(objectId, stripeProductId, stripePriceId, new_hubspot_access_token);
+  
   console.log("✅ Product processing completed successfully!", updatedProduct);
+  return;
 } catch (error) {
   console.error("❌ Error in productCreated:", error);
   
