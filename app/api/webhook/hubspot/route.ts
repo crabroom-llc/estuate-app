@@ -221,236 +221,121 @@ async function processWebhookEvents(parsedBody: any) {
       return;
     }
 
-    // ✅ Track processed `product.propertyChange` events
-    const processedPropertyChanges = new Set<string>();
 
-    // ✅ Group product events by `objectId`
-    const productEventsMap = new Map<string, any[]>();
+    // ✅ Check if any `.creation` event exists in the array
+    const hasCreationEvent = parsedBody.some(event => event.subscriptionType.endsWith(".creation"));
 
-    for (const event of parsedBody) {
-      if (event.subscriptionType.startsWith("product")) {
-        if (!productEventsMap.has(event.objectId)) {
-          productEventsMap.set(event.objectId, []);
-        }
-        productEventsMap.get(event.objectId)!.push(event);
-      }
-    }
+    // ✅ Track processed objectIds to ignore further events
+    const processedObjects = new Set<string>();
 
-    // ✅ Track processed `customer.propertyChange` events
-    const processedCustomerPropertyChanges = new Set<string>();
-
-    // ✅ Group customer events by `objectId`
-    const customerEventsMap = new Map<string, any[]>();
-
-    for (const event of parsedBody) {
-      if (event.subscriptionType.startsWith("customer")) {
-        if (!customerEventsMap.has(event.objectId)) {
-          customerEventsMap.set(event.objectId, []);
-        }
-        customerEventsMap.get(event.objectId)!.push(event);
-      }
-    }
-
-    // ✅ Track processed `company.propertyChange` events
-    const processedCompanyPropertyChanges = new Set<string>();
-
-    // ✅ Group company events by `objectId`
-    const companyEventsMap = new Map<string, any[]>();
-
-    for (const event of parsedBody) {
-      if (event.subscriptionType.startsWith("company")) {
-        if (!companyEventsMap.has(event.objectId)) {
-          companyEventsMap.set(event.objectId, []);
-        }
-        companyEventsMap.get(event.objectId)!.push(event);
-      }
-    }
 
     // ✅ Process Webhook Events
     for (const event of parsedBody) {
       try {
-        const {
-          subscriptionType,
-          objectId,
-          propertyName = null,
-          propertyValue = null,
-        } = event ?? {};
-
+        const { subscriptionType, objectId, propertyName = null, propertyValue = null } = event ?? {};
+    
         if (!objectId) {
           console.warn(`⚠️ Skipping event due to missing objectId:`, event);
           continue;
         }
-
+    
         console.log(`🔹 Event Type: ${subscriptionType}`);
         console.log(`🔹 Object ID: ${objectId}`);
-
+    
+        // ✅ If at least one `.creation` event exists and we already processed this objectId, skip the rest
+        if (hasCreationEvent && processedObjects.has(objectId)) {
+          console.log(`⏩ Skipping event because ${objectId} was already processed.`);
+          continue;
+        }
+    
         switch (subscriptionType) {
           case "contact.creation":
             console.log("✅ Contact Created Event Detected!");
             await contactCreated(portalId, objectId);
-
-            // ✅ Process all `contact.propertyChange` events after contact is created
-            const customerPropertyChange = customerEventsMap.get(objectId) ?? [];
-            for (const customerPropertyChangeEvent of customerPropertyChange) {
-              if (
-                customerPropertyChangeEvent.subscriptionType ===
-                "customer.propertyChange"
-              ) {
-                const eventKey = `${customerPropertyChangeEvent.objectId}-${customerPropertyChangeEvent.propertyName}`;
-                if (!processedCustomerPropertyChanges.has(eventKey)) {
-                  console.log(
-                    "🔄 Processing Customer Property Change after creation..."
-                  );
-                  // await contactUpdated(
-                  //   portalId,
-                  //   objectId,
-                  //   customerPropertyChangeEvent.propertyName,
-                  //   customerPropertyChangeEvent.propertyValue
-                  // );
-                  processedCustomerPropertyChanges.add(eventKey); // ✅ Mark as processed
-                }
-              }
-            }
+            processedObjects.add(objectId);
             break;
-
-          case "contact.deletion":
-            console.log("🗑️ Contact Deleted Event Detected!");
-            await contactDeleted(portalId, objectId);
-            break;
-
-          case "contact.propertyChange":
-            // ✅ Skip if already processed
-            const eventKeyCustomer = `${objectId}-${propertyName}`;
-            if (processedCustomerPropertyChanges.has(eventKeyCustomer)) {
-              console.log(
-                `⚠️ Skipping already processed contact.propertyChange: ${propertyName}`
-              );
-              continue;
-            }
-            console.log("✏️ Contact Property Changed Event Detected!");
-            await contactUpdated(
-              portalId,
-              objectId,
-              propertyName,
-              propertyValue
-            );
-            break;
-
+    
           case "product.creation":
             console.log("✅ Product Created Event Detected!");
             await productCreated(portalId, objectId);
-
-            // ✅ Process all `product.propertyChange` events after product is created
-            const propertyChanges = productEventsMap.get(objectId) ?? [];
-            for (const propertyChangeEvent of propertyChanges) {
-              if (
-                propertyChangeEvent.subscriptionType ===
-                "product.propertyChange"
-              ) {
-                const eventKey = `${propertyChangeEvent.objectId}-${propertyChangeEvent.propertyName}`;
-                if (!processedPropertyChanges.has(eventKey)) {
-                  console.log(
-                    "🔄 Processing Product Property Change after creation..."
-                  );
-                  await productUpdated(
-                    portalId,
-                    objectId,
-                    propertyChangeEvent.propertyName,
-                    propertyChangeEvent.propertyValue
-                  );
-                  processedPropertyChanges.add(eventKey); // ✅ Mark as processed
-                }
-              }
-            }
+            processedObjects.add(objectId);
             break;
-
-          case "product.propertyChange":
-            // ✅ Skip if already processed
-            const eventKey = `${objectId}-${propertyName}`;
-            if (processedPropertyChanges.has(eventKey)) {
-              console.log(
-                `⚠️ Skipping already processed product.propertyChange: ${propertyName}`
-              );
-              continue;
-            }
-            await productUpdated(
-              portalId,
-              objectId,
-              propertyName,
-              propertyValue
-            );
-
-            console.log(
-              "⏳ Product Property Change Detected! Waiting for creation..."
-            );
-            break;
-
-          case "product.deletion":
-            console.log("🗑️ Product Deleted Event Detected!");
-            // await productDeleted(portalId, objectId);
-            break;
-
+    
           case "deal.creation":
             console.log("✅ Deal Created Event Detected!");
             await dealCreated(portalId, objectId);
+            processedObjects.add(objectId);
             break;
-
-          case "deal.propertyChange":
-            console.log("✅ Deal Updated Event Detected!");
-            await dealUpdated(portalId, objectId, propertyName, propertyValue);
-            break;
-
-          //new code
+    
           case "company.creation":
             console.log("✅ Company Created Event Detected!");
             await companyCreated(portalId, objectId);
-            // ✅ Process all `company.propertyChange` events after company is created
-            const companyPropertyChange = companyEventsMap.get(objectId) ?? [];
-            for (const companyPropertyChangeEvent of companyPropertyChange) {
-              if (
-                companyPropertyChangeEvent.subscriptionType ===
-                "company.propertyChange"
-              ) {
-                const eventKey = `${companyPropertyChangeEvent.objectId}-${companyPropertyChangeEvent.propertyName}`;
-                if (!processedCompanyPropertyChanges.has(eventKey)) {
-                  console.log(
-                    "🔄 Processing Company Property Change after creation..."
-                  );
-                  await companyUpdated(
-                    portalId,
-                    objectId,
-                    companyPropertyChangeEvent.propertyName,
-                    companyPropertyChangeEvent.propertyValue
-                  );
-                  processedCompanyPropertyChanges.add(eventKey); // ✅ Mark as processed
-                }
-              }
-            }
+            processedObjects.add(objectId);
             break;
-  
+    
+          case "contact.propertyChange":
+            if (hasCreationEvent) {
+              console.log(`⏩ Skipping contact.propertyChange because contact.creation exists.`);
+              continue;
+            }
+            console.log("✏️ Contact Property Changed Event Detected!");
+            await contactUpdated(portalId, objectId, propertyName, propertyValue);
+            break;
+    
+          case "product.propertyChange":
+            if (hasCreationEvent) {
+              console.log(`⏩ Skipping product.propertyChange because product.creation exists.`);
+              continue;
+            }
+            console.log("✏️ Product Property Changed Event Detected!");
+            await productUpdated(portalId, objectId, propertyName, propertyValue);
+            break;
+    
+          case "deal.propertyChange":
+            if (hasCreationEvent) {
+              console.log(`⏩ Skipping deal.propertyChange because deal.creation exists.`);
+              continue;
+            }
+            console.log("✏️ Deal Property Changed Event Detected!");
+            await dealUpdated(portalId, objectId, propertyName, propertyValue);
+            break;
+    
+          case "company.propertyChange":
+            if (hasCreationEvent) {
+              console.log(`⏩ Skipping company.propertyChange because company.creation exists.`);
+              continue;
+            }
+            console.log("✏️ Company Property Changed Event Detected!");
+            await companyUpdated(portalId, objectId, propertyName, propertyValue);
+            break;
+    
+          case "contact.deletion":
+            if (hasCreationEvent) {
+              console.log(`⏩ Skipping contact.deletion because contact.creation exists.`);
+              continue;
+            }
+            console.log("🗑️ Contact Deleted Event Detected!");
+            await contactDeleted(portalId, objectId);
+            break;
+    
+          case "product.deletion":
+            if (hasCreationEvent) {
+              console.log(`⏩ Skipping product.deletion because product.creation exists.`);
+              continue;
+            }
+            console.log("🗑️ Product Deleted Event Detected!");
+            await productDeleted(portalId, objectId);
+            break;
+    
           case "company.deletion":
+            if (hasCreationEvent) {
+              console.log(`⏩ Skipping company.deletion because company.creation exists.`);
+              continue;
+            }
             console.log("🗑️ Company Deleted Event Detected!");
             await companyDeleted(portalId, objectId);
             break;
-  
-          case "company.propertyChange":
-            console.log("✏️ Company Property Changed Event Detected!");
-            // ✅ Skip if already processed
-            const eventKeyCompany = `${objectId}-${propertyName}`;
-            if (processedCompanyPropertyChanges.has(eventKeyCompany)) {
-              console.log(
-                `⚠️ Skipping already processed company.propertyChange: ${propertyName}`
-              );
-              continue;
-            }
-            await companyUpdated(
-              portalId,
-              objectId,
-              propertyName,
-              propertyValue
-            );
-            break;
-
+    
           default:
             console.warn("⚠️ Unknown Event Type:", subscriptionType);
             break;
@@ -471,7 +356,7 @@ async function processWebhookEvents(parsedBody: any) {
 async function forwardWebhookEvent(eventData: any) {
   try {
     const ngrokURL =
-      "https://f3cf-2409-40c4-30af-ea5c-3c14-e14-f4c4-149c.ngrok-free.app/api/webhook/hubspot";
+      "https://e21f-49-205-245-106.ngrok-free.app/api/webhook/hubspot";
 
     const response = await fetch(ngrokURL, {
       method: "POST",

@@ -1004,12 +1004,60 @@ const processStripePayments = async (dealData, stripeAccessToken) => {
   }
 };
 
-/**
- * Creates a Stripe Invoice for customers when no Stripe products exist.
- * @param {string} customerId - Stripe Customer ID
- * @param {number} amount - Invoice total amount
- * @param {string} stripeAccessToken - Stripe API Key
- */
+
+// const createManualInvoice = async (
+//   customerId,
+//   amount,
+//   stripeAccessToken,
+//   dealId
+// ) => {
+//   console.log("inside manual");
+//   console.log(amount + " amount before " + typeof amount);
+//   amount = Number(amount);
+//   try {
+//     const stripe = await stripeInstance(stripeAccessToken);
+
+//     // ✅ Step 1: Create an Invoice Item
+//     const invoiceItem = await stripe.invoiceItems.create({
+//       customer: customerId,
+//       amount: Math.round(amount * 100), // Stripe expects amounts in cents
+//       currency: "usd",
+//       description: `Invoice for Deal`,
+//       metadata: {
+//         // ✅ Add metadata to individual invoice items
+//         deal_id: dealId,
+//       },
+//     });
+
+//     console.log(
+//       `📄 Invoice item created for Customer ${customerId}: ${invoiceItem.id}`
+//     );
+
+//     // ✅ Step 2: Create the Invoice
+//     const invoice = await stripe.invoices.create({
+//       customer: customerId,
+//       collection_method: "send_invoice", // ✅ Sends invoice instead of charging automatically
+//       days_until_due: 7, // ✅ Invoice is due in 7 days
+//       auto_advance: true, // ✅ Finalize invoice immediately
+//     });
+
+//     console.log(
+//       `📩 Manual invoice created for Customer ${customerId}: ${invoice.id}`
+//     );
+//     const finalizedInvoice = await stripe.invoices.finalizeInvoice(invoice.id);
+//     console.log(
+//       `📨 Invoice finalized and sent immediately: ${finalizedInvoice.id}`
+//     );
+//     return invoice;
+//   } catch (error) {
+//     console.error(
+//       `❌ Error creating manual invoice for customer ${customerId}:`,
+//       error
+//     );
+//     return null;
+//   }
+// };
+
 const createManualInvoice = async (
   customerId,
   amount,
@@ -1019,40 +1067,51 @@ const createManualInvoice = async (
   console.log("inside manual");
   console.log(amount + " amount before " + typeof amount);
   amount = Number(amount);
+
   try {
     const stripe = await stripeInstance(stripeAccessToken);
 
-    // ✅ Step 1: Create an Invoice Item
-    const invoiceItem = await stripe.invoiceItems.create({
-      customer: customerId,
-      amount: Math.round(amount * 100), // Stripe expects amounts in cents
-      currency: "usd",
-      description: `Invoice for Deal`,
-      metadata: {
-        // ✅ Add metadata to individual invoice items
-        deal_id: dealId,
-      },
-    });
-
-    console.log(
-      `📄 Invoice item created for Customer ${customerId}: ${invoiceItem.id}`
-    );
-
-    // ✅ Step 2: Create the Invoice
+    console.log("Creating a new invoice...");
     const invoice = await stripe.invoices.create({
       customer: customerId,
       collection_method: "send_invoice", // ✅ Sends invoice instead of charging automatically
-      days_until_due: 7, // ✅ Invoice is due in 7 days
-      auto_advance: true, // ✅ Finalize invoice immediately
+      days_until_due: 7, // ✅ Payment is due in 7 days
+      auto_advance: false, // ✅ Prevents auto-finalization before items attach
     });
 
-    console.log(
-      `📩 Manual invoice created for Customer ${customerId}: ${invoice.id}`
-    );
+    console.log(`📩 New invoice created: ${invoice.id}`);
+
+    console.log("Creating invoice item and linking it to the invoice...");
+    const invoiceItem = await stripe.invoiceItems.create({
+      customer: customerId,
+      invoice: invoice.id, // ✅ Attach this item to the new invoice
+      amount: Math.round(amount * 100), // Convert to cents
+      currency: "usd",
+      description: "Invoice for Deal",
+      metadata: { deal_id: dealId },
+    });
+
+    console.log(`📄 Invoice item created: ${invoiceItem.id} and linked to invoice: ${invoice.id}`);
+
+    console.log("Fetching invoice before finalizing...");
+    let retrievedInvoice = await stripe.invoices.retrieve(invoice.id);
+    console.log(`📜 Invoice Line Items:`, retrievedInvoice.lines.data);
+
+    if (retrievedInvoice.lines.data.length === 0) {
+      console.log("⚠️ Invoice items not found, waiting before retrying...");
+      await new Promise((resolve) => setTimeout(resolve, 3000)); // Small delay
+      retrievedInvoice = await stripe.invoices.retrieve(invoice.id);
+      console.log(`📜 Retried Invoice Line Items:`, retrievedInvoice.lines.data);
+    }
+
+    console.log("Finalizing invoice...");
     const finalizedInvoice = await stripe.invoices.finalizeInvoice(invoice.id);
-    console.log(
-      `📨 Invoice finalized and sent immediately: ${finalizedInvoice.id}`
-    );
+    console.log(`📨 Invoice finalized: ${finalizedInvoice.id}`);
+
+    console.log("Retrieving updated invoice...");
+    const updatedInvoice = await stripe.invoices.retrieve(finalizedInvoice.id);
+    console.log(`✅ Final Invoice Total: ${updatedInvoice.total / 100} USD`);
+
     return invoice;
   } catch (error) {
     console.error(
