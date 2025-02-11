@@ -352,7 +352,7 @@ const fetchProductandPricesById = async (
       },
     });
 
-    let productData = response.data;
+    const productData = response.data;
     console.log("✅ HubSpot Product Details (First Call):", productData);
 
     // ✅ Check if `stripe_price_id` is missing
@@ -391,7 +391,7 @@ const fetchProductandPricesById = async (
 const checkHubSpotProductProperties = async (hubspotAccessToken: string) => {
   try {
     const properties = ["stripe_product_id", "stripe_price_id"];
-    let results = {};
+    const results = {};
 
     for (const property of properties) {
       try {
@@ -624,20 +624,20 @@ const fetchDealById = async (
     });
 
     console.log("✅ HubSpot Deal Details:", response.data);
-    let dealData = response.data;
+    const dealData = response.data;
 
     // ✅ Extract associated line items
-    let associatedLineItems =
+    const associatedLineItems =
       dealData.associations?.["line items"]?.results?.map((item) => item.id) ||
       [];
-    let dealStage = dealData?.properties?.dealstage;
+    const dealStage = dealData?.properties?.dealstage;
     if (dealStage != "closedwon") {
       console.log(
         `Deal stage is not in closed won current deal stage is ${dealStage}`
       );
       return null;
     }
-    let lineItemsDetails = [] as any[];
+    const lineItemsDetails = [] as any[];
     for (const lineItemId of associatedLineItems) {
       const lineItem = await fetchHubSpotLineItem(
         lineItemId,
@@ -1115,14 +1115,14 @@ const processHubspotDealCreated = async (
       quantity: number;
     }[] = [];
 
-    let associatedContacts =
+    const associatedContacts =
       dealData.associations?.contacts?.results?.map((contact) => contact.id) ||
       [];
     // let associatedCompanies =
     //   dealData.associations?.companies?.results?.map((company) => company.id+"company") ||
     //   [];
 
-    let associatedLineItems =
+    const associatedLineItems =
       dealData.associations?.["line items"]?.results?.map((item) => item.id) ||
       [];
 
@@ -1237,6 +1237,7 @@ const processHubspotDealCreated = async (
       type: "invoice",
       customer: stripeCustomerIds,
       products: collectedProducts,
+      amount
     };
   } catch (error) {
     console.error("❌ Error processing HubSpot deal:", error);
@@ -1693,7 +1694,31 @@ const updateHubSpotCompanyFromStripe = async (
   }
 }
 
-
+const updateHubSpotProductFromStripe = async (
+  hubspotProductId: any,
+  updatedValues: any,
+  hubspotAccessToken: any
+) => {
+  console.log("🚀 => hubspotProductId:", hubspotProductId);
+  try {
+    const response = await axios.patch(
+      `https://api.hubapi.com/crm/v3/objects/products/${hubspotProductId}`,
+      {
+        properties: updatedValues,
+      },
+      {
+        headers: {
+          Authorization: `Bearer ${hubspotAccessToken}`,
+          "Content-Type": "application/json",
+        },
+      }
+    )
+    console.log("✅ HubSpot Product Updated with Stripe ID");
+    return response.data;
+  } catch (error: any) {
+    console.error("❌ Error updating HubSpot Product:", error);
+  }
+}
 
 
 export {
@@ -1713,5 +1738,6 @@ export {
   updateHubSpotDealPaymentStatus,
   fetchdealStripedetailById,
   updateHubSpotCompanyFromStripe,
-  updateHubSpotContactFromStripe
+  updateHubSpotContactFromStripe,
+  updateHubSpotProductFromStripe
 };

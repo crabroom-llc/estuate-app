@@ -11,6 +11,7 @@ import { productDeleted } from "@/components/hubspotWebhookActivities/product/pr
 import { invoicePaid } from "@/components/stripeWebhookActivities/invoice/invoicePaid";
 import { customerUpdate } from "@/components/stripeWebhookActivities/customer/customerUpdate";
 import { companyUpdate } from "@/components/stripeWebhookActivities/company/companyUpdate";
+import { productUpdate } from "@/components/stripeWebhookActivities/product/productUpdated";
 export async function POST(request: NextRequest) {
     try {
         const parsedBody = await request.json();
@@ -108,7 +109,7 @@ async function processWebhookEvents(event: any) {
                 case "product.updated":
                     console.log("✏️ Product Update Event Detected!");
                     if (event.data.object.metadata.deleted == "false") {
-                        // await customerUpdate(event.data, accountId, objectId);
+                        await productUpdate(event.data, accountId, objectId);
                     }
                     break;
 

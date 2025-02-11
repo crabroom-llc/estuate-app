@@ -48,7 +48,7 @@ export async function POST(request: NextRequest) {
       { status: 200 }
     );
 
-    forwardWebhookEvent(rawBody);
+    // forwardWebhookEvent(rawBody);
 
     // 🚀 Process the webhook asynchronously
     processWebhookEvents(parsedBody);
@@ -236,6 +236,36 @@ async function processWebhookEvents(parsedBody: any) {
       }
     }
 
+    // ✅ Track processed `customer.propertyChange` events
+    const processedCustomerPropertyChanges = new Set<string>();
+
+    // ✅ Group customer events by `objectId`
+    const customerEventsMap = new Map<string, any[]>();
+
+    for (const event of parsedBody) {
+      if (event.subscriptionType.startsWith("customer")) {
+        if (!customerEventsMap.has(event.objectId)) {
+          customerEventsMap.set(event.objectId, []);
+        }
+        customerEventsMap.get(event.objectId)!.push(event);
+      }
+    }
+
+    // ✅ Track processed `company.propertyChange` events
+    const processedCompanyPropertyChanges = new Set<string>();
+
+    // ✅ Group company events by `objectId`
+    const companyEventsMap = new Map<string, any[]>();
+
+    for (const event of parsedBody) {
+      if (event.subscriptionType.startsWith("company")) {
+        if (!companyEventsMap.has(event.objectId)) {
+          companyEventsMap.set(event.objectId, []);
+        }
+        companyEventsMap.get(event.objectId)!.push(event);
+      }
+    }
+
     // ✅ Process Webhook Events
     for (const event of parsedBody) {
       try {
@@ -258,21 +288,52 @@ async function processWebhookEvents(parsedBody: any) {
           case "contact.creation":
             console.log("✅ Contact Created Event Detected!");
             await contactCreated(portalId, objectId);
+
+            // ✅ Process all `contact.propertyChange` events after contact is created
+            const customerPropertyChange = customerEventsMap.get(objectId) ?? [];
+            for (const customerPropertyChangeEvent of customerPropertyChange) {
+              if (
+                customerPropertyChangeEvent.subscriptionType ===
+                "customer.propertyChange"
+              ) {
+                const eventKey = `${customerPropertyChangeEvent.objectId}-${customerPropertyChangeEvent.propertyName}`;
+                if (!processedCustomerPropertyChanges.has(eventKey)) {
+                  console.log(
+                    "🔄 Processing Customer Property Change after creation..."
+                  );
+                  // await contactUpdated(
+                  //   portalId,
+                  //   objectId,
+                  //   customerPropertyChangeEvent.propertyName,
+                  //   customerPropertyChangeEvent.propertyValue
+                  // );
+                  processedCustomerPropertyChanges.add(eventKey); // ✅ Mark as processed
+                }
+              }
+            }
             break;
 
           case "contact.deletion":
             console.log("🗑️ Contact Deleted Event Detected!");
-            // await contactDeleted(portalId, objectId);
+            await contactDeleted(portalId, objectId);
             break;
 
           case "contact.propertyChange":
+            // ✅ Skip if already processed
+            const eventKeyCustomer = `${objectId}-${propertyName}`;
+            if (processedCustomerPropertyChanges.has(eventKeyCustomer)) {
+              console.log(
+                `⚠️ Skipping already processed contact.propertyChange: ${propertyName}`
+              );
+              continue;
+            }
             console.log("✏️ Contact Property Changed Event Detected!");
-            // await contactUpdated(
-            //   portalId,
-            //   objectId,
-            //   propertyName,
-            //   propertyValue
-            // );
+            await contactUpdated(
+              portalId,
+              objectId,
+              propertyName,
+              propertyValue
+            );
             break;
 
           case "product.creation":
@@ -291,12 +352,12 @@ async function processWebhookEvents(parsedBody: any) {
                   console.log(
                     "🔄 Processing Product Property Change after creation..."
                   );
-                  // await productUpdated(
-                  //   portalId,
-                  //   objectId,
-                  //   propertyChangeEvent.propertyName,
-                  //   propertyChangeEvent.propertyValue
-                  // );
+                  await productUpdated(
+                    portalId,
+                    objectId,
+                    propertyChangeEvent.propertyName,
+                    propertyChangeEvent.propertyValue
+                  );
                   processedPropertyChanges.add(eventKey); // ✅ Mark as processed
                 }
               }
@@ -324,6 +385,11 @@ async function processWebhookEvents(parsedBody: any) {
             );
             break;
 
+          case "product.deletion":
+            console.log("🗑️ Product Deleted Event Detected!");
+            // await productDeleted(portalId, objectId);
+            break;
+
           case "deal.creation":
             console.log("✅ Deal Created Event Detected!");
             await dealCreated(portalId, objectId);
@@ -331,34 +397,59 @@ async function processWebhookEvents(parsedBody: any) {
 
           case "deal.propertyChange":
             console.log("✅ Deal Updated Event Detected!");
-            // await dealUpdated(portalId, objectId, propertyName, propertyValue);
+            await dealUpdated(portalId, objectId, propertyName, propertyValue);
             break;
 
-            //new code
-            case "product.deletion":
-              console.log("🗑️ Product Deleted Event Detected!");
-              // await productDeleted(portalId, objectId);
-              break;
+          //new code
+          case "company.creation":
+            console.log("✅ Company Created Event Detected!");
+            await companyCreated(portalId, objectId);
+            // ✅ Process all `company.propertyChange` events after company is created
+            const companyPropertyChange = companyEventsMap.get(objectId) ?? [];
+            for (const companyPropertyChangeEvent of companyPropertyChange) {
+              if (
+                companyPropertyChangeEvent.subscriptionType ===
+                "company.propertyChange"
+              ) {
+                const eventKey = `${companyPropertyChangeEvent.objectId}-${companyPropertyChangeEvent.propertyName}`;
+                if (!processedCompanyPropertyChanges.has(eventKey)) {
+                  console.log(
+                    "🔄 Processing Company Property Change after creation..."
+                  );
+                  await companyUpdated(
+                    portalId,
+                    objectId,
+                    companyPropertyChangeEvent.propertyName,
+                    companyPropertyChangeEvent.propertyValue
+                  );
+                  processedCompanyPropertyChanges.add(eventKey); // ✅ Mark as processed
+                }
+              }
+            }
+            break;
   
-            case "company.creation":
-              console.log("✅ Company Created Event Detected!");
-              await companyCreated(portalId, objectId);
-              break;
+          case "company.deletion":
+            console.log("🗑️ Company Deleted Event Detected!");
+            await companyDeleted(portalId, objectId);
+            break;
   
-            case "company.deletion":
-              console.log("🗑️ Company Deleted Event Detected!");
-              // await companyDeleted(portalId, objectId);
-              break;
-  
-            case "company.propertyChange":
-              console.log("✏️ Company Property Changed Event Detected!");
-              // await companyUpdated(
-              //   portalId,
-              //   objectId,
-              //   propertyName,
-              //   propertyValue
-              // );
-              break;
+          case "company.propertyChange":
+            console.log("✏️ Company Property Changed Event Detected!");
+            // ✅ Skip if already processed
+            const eventKeyCompany = `${objectId}-${propertyName}`;
+            if (processedCompanyPropertyChanges.has(eventKeyCompany)) {
+              console.log(
+                `⚠️ Skipping already processed company.propertyChange: ${propertyName}`
+              );
+              continue;
+            }
+            await companyUpdated(
+              portalId,
+              objectId,
+              propertyName,
+              propertyValue
+            );
+            break;
 
           default:
             console.warn("⚠️ Unknown Event Type:", subscriptionType);
@@ -371,6 +462,7 @@ async function processWebhookEvents(parsedBody: any) {
 
     console.log("✅ Portal ID verified successfully:", portalId);
   } catch (error: any) {
+    console.log(error);
     console.error("❌ Error in processing webhook events:", error.message);
   }
 }
@@ -379,7 +471,7 @@ async function processWebhookEvents(parsedBody: any) {
 async function forwardWebhookEvent(eventData: any) {
   try {
     const ngrokURL =
-      "https://97e0-2409-40c4-30c3-4bdd-1cd1-2cb9-f89f-9c82.ngrok-free.app/api/webhook/hubspot";
+      "https://f3cf-2409-40c4-30af-ea5c-3c14-e14-f4c4-149c.ngrok-free.app/api/webhook/hubspot";
 
     const response = await fetch(ngrokURL, {
       method: "POST",

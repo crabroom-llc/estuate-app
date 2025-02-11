@@ -4,7 +4,7 @@ import {
     createHubSpotDealPropertyPaymentPaidDate,
     updateHubSpotDealPaymentStatus,
 } from "@/components/hubspotActions/hubspotActions";
-import { createStripeCustomer, fetchStripeInvoice } from "@/components/stripeActions/stripeActions";
+import { checkPaymentMethod, createStripeCustomer, fetchStripeInvoice } from "@/components/stripeActions/stripeActions";
 import { getTokens } from "@/components/hubspotWebhookActivities/gettokens";
 import fs from 'fs';
 const invoicePaid = async (portalId: any, objectId: any) => {
@@ -30,6 +30,7 @@ const invoicePaid = async (portalId: any, objectId: any) => {
         const dealId = invoice?.subscription_details?.metadata?.deal_id;
         const paymentPaidDate = invoice?.status_transitions?.paid_at;
         const paymentStatus = invoice?.status;
+        const invoice_id = objectId;
         console.log("🔹 Deal ID:", dealId)
         console.log("🔹 Payment Status:", paymentStatus);
         console.log("🔹 Payment Paid Date:", paymentPaidDate);
@@ -37,6 +38,7 @@ const invoicePaid = async (portalId: any, objectId: any) => {
         // 🔹 Step 5: Add a new property in hubspot deal
         await createHubSpotDealPropertyPaymentPaidDate(new_hubspot_access_token)
 
+        await checkPaymentMethod(portalId, new_stripeAccessToken,invoice_id)
         // 🔹 Step 6: Update the deal in HubSpot
         await updateHubSpotDealPaymentStatus(dealId, paymentStatus, paymentPaidDate, new_hubspot_access_token);
         console.log("✅ HubSpot Deal Updated Successfully!");

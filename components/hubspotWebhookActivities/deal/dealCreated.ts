@@ -26,8 +26,8 @@ const dealCreated = async (portalId, objectId) => {
 
         const createSubcription = await processStripePayments(dealData, new_stripeAccessToken);
         if (createSubcription) {
-            const { dealId, invoices, subscriptions } = createSubcription;
-            console.log("✅ Final Data:", { dealId, invoices, subscriptions });
+            const { dealId, invoices, subscriptions, amount } = createSubcription;
+            console.log("✅ Final Data:", { dealId, invoices, subscriptions, amount });
           
             // ✅ Now update HubSpot with all collected IDs
             await updateHubSpotDeal(dealId, subscriptions, invoices, new_hubspot_access_token);

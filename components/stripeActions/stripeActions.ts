@@ -1,4 +1,5 @@
 import Stripe from "stripe";
+import { pool } from "@/utils/mysql";
 
 const stripeInstance = (stripeAccessToken: string) => {
   return new Stripe(stripeAccessToken, {
@@ -15,9 +16,8 @@ const createStripeCustomer = async (contact, stripeAccessToken, contactId) => {
     });
 
     const customer = await stripe.customers.create({
-      name: `${contact.properties?.firstname || ""} ${
-        contact.properties?.lastname || ""
-      }`.trim(),
+      name: `${contact.properties?.firstname || ""} ${contact.properties?.lastname || ""
+        }`.trim(),
       email: contact.properties.email || "",
       phone: contact.properties.phone || "",
       metadata: {
@@ -150,7 +150,7 @@ const updateStripeCustomer = async (
       jobtitle: "metadata.metadata",
     };
 
-    let updateData: Record<string, any> = {
+    const updateData: Record<string, any> = {
       metadata: {}, // Ensure metadata exists
       address: {}, // Ensure address exists
     };
@@ -356,8 +356,8 @@ const updateStripeProduct = async (
     const existingProduct = await stripe.products.retrieve(productId);
 
     // Initialize update object
-    let updateData: Stripe.ProductUpdateParams = {};
-    let metadataUpdate: Record<string, string> = existingProduct.metadata || {};
+    const updateData: Stripe.ProductUpdateParams = {};
+    const metadataUpdate: Record<string, string> = existingProduct.metadata || {};
     let stripePriceId = null as any;
     // 🔹 Handle Standard Stripe Fields
     switch (propertyName) {
@@ -826,10 +826,12 @@ const processStripePayments = async (dealData, stripeAccessToken) => {
       dealId: string;
       invoices: string[];
       subscriptions: string[];
+      amount: number;
     } = {
       dealId: dealId,
       invoices: [],
       subscriptions: [],
+      amount: amount,
     };
 
     for (const customerId of customer) {
@@ -1346,7 +1348,7 @@ const createSubscriptionWithInvoice = async (
       }, {} as Record<string, Stripe.SubscriptionCreateParams.Item[]>);
 
     // ✅ Step 2: Create separate subscriptions for each billing interval group
-    let createdSubscriptions: {
+    const createdSubscriptions: {
       subscriptionId: string;
       invoiceId: string | null;
     }[] = [];
@@ -1528,6 +1530,8 @@ const updateStripeCompany = async (
       time_zone: "metadata.time_zone",
       description: "metadata.description",
       linkedin_url: "metadata.linkedin_url",
+      domain: "metadata.website",
+      name: "name",
     };
 
     const updateData: Record<string, any> = {
@@ -1690,6 +1694,87 @@ const fetchStripeInvoice = async (invoiceId, stripeAccessToken) => {
   }
 };
 
+const checkPaymentMethod = async (
+  stripe_acc_id: string,
+  stripe_access_token: string,
+  invoice_id: string
+) => {
+  try {
+    // Define SQL Query
+    const query = `
+    SELECT uhd.save_payment_method
+    FROM estuate.user_oauth uo
+    JOIN estuate.user_stripe_data usd ON uo.user_id = usd.user_id
+    JOIN estuate.user_hubspot_data uhd ON uo.user_id = uhd.user_id
+    WHERE uo.stripe_acc = ?;
+      `;
+
+    // Get a database connection
+    const connection = await pool.getConnection();
+
+    try {
+      // Execute query
+      const [rows]: any[] = await connection.execute(query, [stripe_acc_id]);
+
+      // Extract save_payment_method value
+      const save_payment_method =
+        rows.length > 0 ? rows[0].save_payment_method : null;
+      console.log("Save Payment Method:", save_payment_method);
+
+      if (!save_payment_method) {
+        console.log("Payment method save option missing.");
+        return;
+      }
+      if (save_payment_method == "no") {
+        console.log("Payment method save option not enabled.");
+        return;
+      }
+
+      // Initialize Stripe
+      const stripe = new Stripe(stripe_access_token, {
+        apiVersion: "2023-10-16" as Stripe.LatestApiVersion,
+      });
+
+      // Retrieve invoice
+      const invoice = await stripe.invoices.retrieve(invoice_id);
+      const payment_intent_id = invoice.payment_intent as string;
+      console.log("Payment Intent ID:", payment_intent_id);
+
+      // Retrieve the PaymentIntent to get the Payment Method ID
+      const paymentIntent = await stripe.paymentIntents.retrieve(
+        payment_intent_id
+      );
+      const payment_method_id = paymentIntent.payment_method as string;
+      console.log("Payment Method ID:", payment_method_id);
+
+      if (invoice.customer) {
+        await stripe.paymentMethods.attach(payment_method_id, {
+          customer: invoice.customer as string,
+        });
+
+        console.log("Payment method attached to customer:", invoice.customer);
+
+        // Set the Payment Method as Default for Future Invoices
+        await stripe.customers.update(invoice.customer as string, {
+          invoice_settings: { default_payment_method: payment_method_id },
+        });
+
+        console.log("Payment method set as default for future invoices.");
+      } else {
+        console.log("Invoice does not have a valid customer ID.");
+      }
+
+      console.log("Payment method successfully saved for future use.");
+    } finally {
+      // Release the database connection
+      connection.release();
+    }
+  } catch (error) {
+    console.error("Error fetching save_payment_method:", error);
+    throw error;
+  }
+};
+
 export {
   createStripeCustomer,
   updateStripeCustomer,
@@ -1706,4 +1791,5 @@ export {
   getProductStripeId,
   deleteStripeProduct,
   fetchStripeInvoice,
+  checkPaymentMethod
 };
