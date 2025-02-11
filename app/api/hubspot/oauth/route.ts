@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import privateRoute from "@/utils/privateRoute";
 import { pool } from "@/utils/mysql";
+import { successObj } from "@/utils/responseObj";
 
 const HUBSPOT_CLIENT_ID = process.env.HUBSPOT_CLIENT_ID;
 const HUBSPOT_REDIRECT_URI = process.env.HUBSPOT_REDIRECT_URI as string;
@@ -38,7 +39,7 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   try {
     const { code, userId } = await request.json();
-    console.log("USer id here"+userId)
+    console.log("USer id here" + userId)
     if (!code || !userId || userId == 0) {
       console.log(userId);
       return NextResponse.json(
@@ -69,7 +70,8 @@ export async function POST(request: Request) {
       );
     }
 
-    const { access_token, refresh_token } = tokenData;
+    const { access_token, refresh_token, expires_in } = tokenData;
+    const expiryTime = new Date(Date.now() + expires_in * 1000);
     console.log("✅ HubSpot Access Token:", access_token);
     console.log("✅ HubSpot Refresh Token:", refresh_token);
     // 🛑 Step 2: Fetch HubSpot Account Details (Get `portalId`)
@@ -106,17 +108,17 @@ export async function POST(request: Request) {
         "SELECT id FROM user_oauth WHERE user_id = ?",
         [userId]
       );
-      console.log("user id length "+existingUser.length);
+      console.log("user id length " + existingUser.length);
       if (existingUser.length > 0) {
         // 🛑 Step 4: If user exists, update their HubSpot data
         // await connection.query(
         //   "UPDATE user_hubspot_data SET hubspot_access_token = ?, hubspot_refresh_token = ?, updated_at = NOW() WHERE user_id = ?",
         //   [access_token, refresh_token,  userId]
         // );
-        
+
         await connection.query(
-          "INSERT INTO user_hubspot_data (user_id, hubspot_access_token, hubspot_refresh_token, created_at, updated_at) VALUES ( ?, ?, ?, NOW(), NOW())",
-          [userId, access_token, refresh_token ]
+          "INSERT INTO user_hubspot_data (user_id, hubspot_access_token, hubspot_refresh_token, created_at, updated_at, hubspot_expiry_time) VALUES ( ?, ?, ?, NOW(), NOW(), ?)",
+          [userId, access_token, refresh_token, expiryTime]
         );
         console.log("updated user_hubspot_data");
         await connection.query(
@@ -131,8 +133,8 @@ export async function POST(request: Request) {
         );
 
         await connection.query(
-          "INSERT INTO user_hubspot_data (user_id, hubspot_access_token, hubspot_refresh_token, created_at, updated_at) VALUES ( ?, ?, ?, NOW(), NOW())",
-          [userId, access_token, refresh_token ]
+          "INSERT INTO user_hubspot_data (user_id, hubspot_access_token, hubspot_refresh_token, created_at, updated_at, hubspot_expiry_time) VALUES ( ?, ?, ?, NOW(), NOW(), ?)",
+          [userId, access_token, refresh_token, expiryTime]
         );
       }
 
@@ -149,7 +151,7 @@ export async function POST(request: Request) {
     }
 
     return NextResponse.json(
-      { message: "HubSpot OAuth completed successfully", hubspotPortalId },
+      { message: "HubSpot OAuth completed successfully", hubspotPortalId, ...successObj },
       { status: 200 }
     );
   } catch (error: any) {

@@ -25,7 +25,7 @@ const gethubspotaccesstoken = async (refreshToken: string) => {
       "✅ HubSpot Access Token Refreshed:",
       response.data.access_token
     );
-    return response.data.access_token;
+    return ({ newAccessToken: response.data.access_token, expires_in: response.data.expires_in });
   } catch (error) {
     console.error("❌ Error refreshing HubSpot token:", error);
     return null;
@@ -41,7 +41,7 @@ const gethubspotaccesstokenWebhook = async (
 
     // Fetch the last updated time
     const [rows]: any[] = await connection.query(
-      `SELECT updated_at, hubspot_access_token FROM user_hubspot_data WHERE hubspot_access_token = ?`,
+      `SELECT updated_at, hubspot_access_token, hubspot_expiry_time FROM user_hubspot_data WHERE hubspot_access_token = ?`,
       [hubspot_access_token]
     );
 
@@ -50,23 +50,23 @@ const gethubspotaccesstokenWebhook = async (
       return null;
     }
 
-    const { updated_at, hubspot_access_token: existingToken } = rows[0];
+    const { updated_at, hubspot_access_token: existingToken, hubspot_expiry_time } = rows[0];
     // Convert `updated_at` to a real UTC Date object
 
     // Convert `updated_at` to a Date object
-    let dbDate = new Date(updated_at);
+    const dbDate = new Date(hubspot_expiry_time);
 
     // Manually adjust if necessary (force UTC conversion)
-    dbDate = moment.utc(dbDate).subtract(5, "hours").toDate();
+    // dbDate = moment.utc(dbDate).subtract(5, "hours").toDate();
 
     // Convert the adjusted timestamp to a Moment.js object
-    const lastUpdatedTime = moment.utc(dbDate);
+    const expiryTime = moment.utc(dbDate);
 
     // Get current UTC time
     const currentTime = moment.utc();
 
     // Calculate difference in minutes
-    const diffInMinutes = currentTime.diff(lastUpdatedTime, "minutes");
+    const diffInMinutes = expiryTime.diff(currentTime, "minutes");
 
     // Debug logs
     // console.log("📌 Raw updated_at from DB:", updated_at);
@@ -74,19 +74,24 @@ const gethubspotaccesstokenWebhook = async (
     //   "📌 Converted DB Date Object (Adjusted to UTC):",
     //   dbDate.toISOString()
     // );
-    // console.log("📌 Parsed lastUpdatedTime (UTC):", lastUpdatedTime.format());
+    // console.log("📌 Parsed expiryTime (UTC):", expiryTime.format());
     // console.log("📌 Current UTC Time:", currentTime.format());
     console.log(`⏳ Time difference hubspot: ${diffInMinutes} minutes`);
     // console.log("🖥️ System Local Time:", new Date().toString());
-    if (diffInMinutes > 30) {
+    if (diffInMinutes <= 0) {
       console.log("HubSpot access token expired. Refreshing...");
       // Generate new access token (Replace this with actual token generation logic)
-      const newAccessToken = await gethubspotaccesstoken(refreshToken);
+      const tokenResponse = await gethubspotaccesstoken(refreshToken);
+      if (!tokenResponse) {
+        throw new Error("Failed to refresh HubSpot access token");
+      }
+      const { newAccessToken, expires_in } = tokenResponse;
+      const expiryTime = new Date(Date.now() + expires_in * 1000);
 
       // Update the new access token in the database
       await connection.query(
-        `UPDATE user_hubspot_data SET hubspot_access_token = ?, updated_at = UTC_TIMESTAMP() WHERE hubspot_access_token = ?`,
-        [newAccessToken, hubspot_access_token]
+        `UPDATE user_hubspot_data SET hubspot_access_token = ?, updated_at = UTC_TIMESTAMP(), hubspot_expiry_time = ? WHERE hubspot_access_token = ?`,
+        [newAccessToken, expiryTime, hubspot_access_token]
       );
 
       console.log(

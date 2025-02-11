@@ -155,6 +155,11 @@ export async function POST(request: Request) {
     }
 
     const { access_token, refresh_token, stripe_user_id } = data;
+    // stripe oauth token expires in 24 hours
+    const expiry_time = new Date(Date.now() + 24 * 60 * 60 * 1000) // Add 24 hours
+      .toISOString()
+      .slice(0, 19)
+      .replace("T", " "); // Convert to MySQL DATETIME format
 
     // 🛑 Insert into the database
     let connection;
@@ -195,15 +200,15 @@ export async function POST(request: Request) {
       if (existingStripe.length > 0) {
         // 🛑 Step 5: If user_id exists, UPDATE the existing record
         await connection.query(
-          "UPDATE user_stripe_data SET stripe_access_token = ?, stripe_refresh_token = ?, updated_at = NOW() WHERE user_id = ?",
-          [access_token, refresh_token, userId]
+          "UPDATE user_stripe_data SET stripe_access_token = ?, stripe_refresh_token = ?, updated_at = NOW(), stripe_expiry_time = ? WHERE user_id = ?",
+          [access_token, refresh_token, expiry_time, userId]
         );
         console.log(`✅ Updated user_stripe_data for user_id: ${userId}`);
       } else {
         // 🛑 Step 6: If user_id does NOT exist, INSERT a new record
         await connection.query(
-          "INSERT INTO user_stripe_data (user_id, stripe_access_token, stripe_refresh_token, created_at, updated_at) VALUES (?, ?, ?, NOW(), NOW())",
-          [userId, access_token, refresh_token]
+          "INSERT INTO user_stripe_data (user_id, stripe_access_token, stripe_refresh_token, created_at, updated_at, stripe_expiry_time) VALUES (?, ?, ?, NOW(), NOW(), ?)",
+          [userId, access_token, refresh_token, expiry_time]
         );
         console.log(
           `✅ Inserted new record in user_stripe_data for user_id: ${userId}`
