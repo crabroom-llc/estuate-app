@@ -1658,7 +1658,7 @@ const getCompanyStripeId = async (companyId, stripeAccessToken) => {
     // Find the matching customer based on metadata
     const customer = customers.find((cust) => {
       return (
-        cust.metadata.hubspot_company_id.toString() === companyId.toString()
+        cust?.metadata?.hubspot_company_id.toString() === companyId.toString()
       );
     });
 
@@ -1690,7 +1690,7 @@ const getCustomerStripeId = async (companyId, stripeAccessToken) => {
     // Find the matching customer based on metadata
     const customer = customers.find((cust) => {
       return (
-        cust.metadata.hubspot_contact_id.toString() === companyId.toString()
+        cust?.metadata?.hubspot_contact_id.toString() === companyId.toString()
       );
     });
 
@@ -1722,7 +1722,7 @@ const getProductStripeId = async (companyId, stripeAccessToken) => {
     // Find the matching product based on metadata
     const product = products.find((cust) => {
       return (
-        cust.metadata.hubspot_product_id.toString() === companyId.toString()
+        cust?.metadata?.hubspot_product_id.toString() === companyId.toString()
       );
     });
 

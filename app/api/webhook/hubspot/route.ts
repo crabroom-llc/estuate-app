@@ -49,7 +49,11 @@ export async function POST(request: NextRequest) {
     );
 
     // forwardWebhookEvent(rawBody);
-
+    // 🚫 Skip processing if the event was triggered by Stripe
+    if (parsedBody[0].changeSource === "INTEGRATION") {
+      console.log("🚫 Skipping HubSpot update because it was triggered by Stripe");
+      return response;
+    }
     // 🚀 Process the webhook asynchronously
     processWebhookEvents(parsedBody);
 
@@ -233,46 +237,46 @@ async function processWebhookEvents(parsedBody: any) {
     for (const event of parsedBody) {
       try {
         const { subscriptionType, objectId, propertyName = null, propertyValue = null } = event ?? {};
-    
+
         if (!objectId) {
           console.warn(`⚠️ Skipping event due to missing objectId:`, event);
           continue;
         }
-    
+
         console.log(`🔹 Event Type: ${subscriptionType}`);
         console.log(`🔹 Object ID: ${objectId}`);
-    
+
         // ✅ If at least one `.creation` event exists and we already processed this objectId, skip the rest
         if (hasCreationEvent && processedObjects.has(objectId)) {
           console.log(`⏩ Skipping event because ${objectId} was already processed.`);
           continue;
         }
-    
+
         switch (subscriptionType) {
           case "contact.creation":
             console.log("✅ Contact Created Event Detected!");
             await contactCreated(portalId, objectId);
             processedObjects.add(objectId);
             break;
-    
+
           case "product.creation":
             console.log("✅ Product Created Event Detected!");
             await productCreated(portalId, objectId);
             processedObjects.add(objectId);
             break;
-    
+
           case "deal.creation":
             console.log("✅ Deal Created Event Detected!");
             await dealCreated(portalId, objectId);
             processedObjects.add(objectId);
             break;
-    
+
           case "company.creation":
             console.log("✅ Company Created Event Detected!");
             await companyCreated(portalId, objectId);
             processedObjects.add(objectId);
             break;
-    
+
           case "contact.propertyChange":
             if (hasCreationEvent) {
               console.log(`⏩ Skipping contact.propertyChange because contact.creation exists.`);
@@ -281,7 +285,7 @@ async function processWebhookEvents(parsedBody: any) {
             console.log("✏️ Contact Property Changed Event Detected!");
             await contactUpdated(portalId, objectId, propertyName, propertyValue);
             break;
-    
+
           case "product.propertyChange":
             if (hasCreationEvent) {
               console.log(`⏩ Skipping product.propertyChange because product.creation exists.`);
@@ -290,7 +294,7 @@ async function processWebhookEvents(parsedBody: any) {
             console.log("✏️ Product Property Changed Event Detected!");
             await productUpdated(portalId, objectId, propertyName, propertyValue);
             break;
-    
+
           case "deal.propertyChange":
             if (hasCreationEvent) {
               console.log(`⏩ Skipping deal.propertyChange because deal.creation exists.`);
@@ -299,7 +303,7 @@ async function processWebhookEvents(parsedBody: any) {
             console.log("✏️ Deal Property Changed Event Detected!");
             await dealUpdated(portalId, objectId, propertyName, propertyValue);
             break;
-    
+
           case "company.propertyChange":
             if (hasCreationEvent) {
               console.log(`⏩ Skipping company.propertyChange because company.creation exists.`);
@@ -308,7 +312,7 @@ async function processWebhookEvents(parsedBody: any) {
             console.log("✏️ Company Property Changed Event Detected!");
             await companyUpdated(portalId, objectId, propertyName, propertyValue);
             break;
-    
+
           case "contact.deletion":
             if (hasCreationEvent) {
               console.log(`⏩ Skipping contact.deletion because contact.creation exists.`);
@@ -317,7 +321,7 @@ async function processWebhookEvents(parsedBody: any) {
             console.log("🗑️ Contact Deleted Event Detected!");
             await contactDeleted(portalId, objectId);
             break;
-    
+
           case "product.deletion":
             if (hasCreationEvent) {
               console.log(`⏩ Skipping product.deletion because product.creation exists.`);
@@ -326,7 +330,7 @@ async function processWebhookEvents(parsedBody: any) {
             console.log("🗑️ Product Deleted Event Detected!");
             await productDeleted(portalId, objectId);
             break;
-    
+
           case "company.deletion":
             if (hasCreationEvent) {
               console.log(`⏩ Skipping company.deletion because company.creation exists.`);
@@ -335,7 +339,7 @@ async function processWebhookEvents(parsedBody: any) {
             console.log("🗑️ Company Deleted Event Detected!");
             await companyDeleted(portalId, objectId);
             break;
-    
+
           default:
             console.warn("⚠️ Unknown Event Type:", subscriptionType);
             break;

@@ -27,10 +27,12 @@ const customerUpdate = async (data: any, accountId: any, objectId: any) => {
                 if (key === "name") {
                     const name = data.object[key];
                     const names = name.split(" ");
+                    const firstname = names[0];
+                    const lastname = names.slice(1).join(" ");
                     updatedValues = {
                         ...updatedValues,
-                        "firstname": names[0],
-                        "lastname": names[1],
+                        "firstname": firstname,
+                        "lastname": lastname,
                     };
                 } else {
                     updatedValues = {

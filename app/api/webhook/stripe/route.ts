@@ -36,6 +36,12 @@ export async function POST(request: NextRequest) {
             { status: 200 }
         );
 
+        // 🚫 Skip Stripe update if it was triggered by HubSpot
+        if (parsedBody.request.idempotency_key.startsWith("stripe-node-retry")) {
+            console.log("🚫 Skipping Stripe update because it was triggered by Hubspot");
+            return response;
+        }
+
         // 🚀 Process the webhook asynchronously
         processWebhookEvents(parsedBody);
 

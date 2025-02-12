@@ -40,6 +40,7 @@ const productUpdate = async (data: any, accountId: any, objectId: any) => {
             }
         });
 
+        delete updatedValues.updated;
         // 🔹 Step 6: Update the product in Hubspot
         const productUpdate = await updateHubSpotProductFromStripe(hubspotProductId, updatedValues, new_hubspot_access_token);
         console.log("🚀 => productUpdate:", productUpdate);
