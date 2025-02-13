@@ -12,45 +12,80 @@ import { invoicePaid } from "@/components/stripeWebhookActivities/invoice/invoic
 import { customerUpdate } from "@/components/stripeWebhookActivities/customer/customerUpdate";
 import { companyUpdate } from "@/components/stripeWebhookActivities/company/companyUpdate";
 import { productUpdate } from "@/components/stripeWebhookActivities/product/productUpdated";
+import Stripe from "stripe";
+
+
 export async function POST(request: NextRequest) {
     try {
-        const parsedBody = await request.json();
+        const stripeSecretKey = process.env.STRIPE_CLIENT_SECRET;
+        const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
+
+        if (!stripeSecretKey) {
+            console.error("❌ STRIPE_SECRET_KEY is missing");
+            return NextResponse.json({ error: "Server misconfiguration: STRIPE_SECRET_KEY is missing" }, { status: 500 });
+        }
+
+        if (!webhookSecret) {
+            console.error("❌ STRIPE_WEBHOOK_SECRET is missing");
+            return NextResponse.json({ error: "Server misconfiguration: STRIPE_WEBHOOK_SECRET is missing" }, { status: 500 });
+        }
+
+        const stripe = new Stripe(stripeSecretKey, {
+            apiVersion: "2023-10-16" as Stripe.LatestApiVersion,
+        });
+
+        const sig = request.headers.get("stripe-signature");
+        if (!sig) {
+            return NextResponse.json({ error: "Missing Stripe signature" }, { status: 400 });
+        }
+
+        // Read raw request body as buffer
+        const requestBody = await request.arrayBuffer();
+        const buffer = Buffer.from(requestBody);
+
+        let event;
+        try {
+            event = stripe.webhooks.constructEvent(buffer, sig, webhookSecret);
+        } catch (err: any) {
+            console.error("❌ Webhook signature verification failed:", err.message);
+            return NextResponse.json({ error: `Webhook Error: ${err.message}` }, { status: 400 });
+        }
+
+        console.log("🔔 Stripe Webhook Event Received:", JSON.stringify(event, null, 2));
+
+        // ✅ Use `event.data.object` instead of parsing request.json()
+        const eventData = event.data.object;
 
         // 🔹 Validate if the request body is not empty
-        if (!parsedBody) {
-            console.error("❌ Empty request body received");
+        if (!eventData) {
+            console.error("❌ Empty event data received");
             return NextResponse.json(
-                { message: "Empty request body" },
+                { message: "Empty event data" },
                 { status: 400 }
             );
         }
 
-        console.log(
-            "🔔 Stripe Webhook Event Received:",
-            JSON.stringify(parsedBody, null, 2)
-        );
-
-        // ✅ Respond immediately to Stripe to prevent retries
+        // ✅ Respond to Stripe immediately to prevent retries
         const response = NextResponse.json(
             { message: "Webhook received, processing in background" },
             { status: 200 }
         );
-
-        // 🚫 Skip Stripe update if it was triggered by HubSpot
-        if (parsedBody.request.idempotency_key.startsWith("stripe-node-retry")) {
-            console.log("🚫 Skipping Stripe update because it was triggered by Hubspot");
+        
+        if (event.request?.idempotency_key?.startsWith("stripe-node-retry")) {
+            console.log("🚫 Skipping Stripe update because it was triggered by HubSpot");
             return response;
         }
 
         // 🚀 Process the webhook asynchronously
-        processWebhookEvents(parsedBody);
+        processWebhookEvents(event);
 
         return response;
     } catch (error: any) {
-        console.error("❌ Error processing HubSpot webhook:", error.message);
+        console.error("❌ Error processing Stripe webhook:", error.message);
         return NextResponse.json({ error: "Server error" }, { status: 500 });
     }
 }
+
 
 // 🔄 Background processing function
 async function processWebhookEvents(event: any) {

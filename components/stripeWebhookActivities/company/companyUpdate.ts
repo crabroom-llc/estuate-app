@@ -1,30 +1,8 @@
-// {
-//     name: `${company.properties.name || ""}`,
-//     email: company.properties.email || "",
-//     phone: company.properties.phone || "",
-//     address: {
-//       city: company.properties.city || "",
-//       state: company.properties.state || "",
-//       postal_code: company.properties.zip || "",
-//       country: company.properties.country || "",
-//     },
-//     metadata: {
-//       hubspot_company_id: companyId, // ✅ Adding HubSpot Company ID
-//       industry: company.properties.industry || "",
-//       type: company.properties.type || "",
-//       number_of_employees: company.properties.numberofemployees || "",
-//       annual_revenue: company.properties.annualrevenue || "",
-//       time_zone: company.properties.timezone || "",
-//       description: company.properties.description || "",
-//       linkedin_url: company.properties.linkedincompanyprofile || "",
-//       deleted: "false",
-//     },
-//   }
 import { updateHubSpotCompanyFromStripe } from "@/components/hubspotActions/hubspotActions";
-import { getTokens } from "@/components/hubspotWebhookActivities/gettokens";
+import { getStripeTokens } from "@/components/hubspotWebhookActivities/gettokens";
 const companyUpdate = async (data: any, accountId: any, objectId: any) => {
     try {
-        const tokens = await getTokens("49208579");
+        const tokens = await getStripeTokens(accountId);
 
         if (!tokens) {
             console.error("❌ Failed to retrieve access tokens.");
