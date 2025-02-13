@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { pool } from "@/utils/mysql";
+import { createHmac, createHash, timingSafeEqual } from "crypto";
 import { contactCreated } from "@/components/hubspotWebhookActivities/contact/contactCreated";
 import { contactUpdated } from "@/components/hubspotWebhookActivities/contact/contactUpdated";
 import { contactDeleted } from "@/components/hubspotWebhookActivities/contact/contactDeleted";
@@ -12,12 +13,15 @@ import { companyUpdated } from "@/components/hubspotWebhookActivities/company/co
 import { companyDeleted } from "@/components/hubspotWebhookActivities/company/companyDeleted";
 import { productDeleted } from "@/components/hubspotWebhookActivities/product/productDeleted";
 
+const CLIENT_SECRET = process.env.HUBSPOT_CLIENT_SECRET || "";
 
 export async function POST(request: NextRequest) {
   try {
-    const rawBody = await request.text();
+    console.log(
+      JSON.stringify(Object.fromEntries(request.headers.entries()), null, 2)
+    );
 
-    // 🔹 Validate if the request body is not empty
+    const rawBody = await request.text();
     if (!rawBody) {
       console.error("❌ Empty request body received");
       return NextResponse.json(
@@ -25,6 +29,74 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       );
     }
+
+    const headers = request.headers;
+    const signatureVersion = headers.get("x-hubspot-signature-version");
+    const signature = headers.get("x-hubspot-signature");
+    const signatureV3 = headers.get("x-hubspot-signature-v3");
+    const timestamp = headers.get("x-hubspot-request-timestamp");
+
+    if (!signatureVersion) {
+      console.error("❌ Missing X-HubSpot-Signature-Version header");
+      return NextResponse.json(
+        { message: "Unauthorized request" },
+        { status: 400 }
+      );
+    }
+
+    const method = request.method;
+    const url = new URL(request.url);
+    const uri = `${url.origin}${url.pathname}`;
+
+    // 🔹 Validate the request signature
+    let isValid = false;
+    if (signatureVersion === "v1") {
+      isValid = validateSignatureV1(signature, rawBody);
+    } else if (signatureVersion === "v2") {
+      isValid = validateSignatureV2(signature, method, uri, rawBody);
+    } else if (signatureVersion === "v3") {
+      if (!timestamp) {
+        console.error(
+          "❌ Missing X-HubSpot-Request-Timestamp for v3 validation"
+        );
+        return NextResponse.json(
+          { message: "Unauthorized request" },
+          { status: 400 }
+        );
+      }
+      isValid = validateSignatureV3(
+        signatureV3,
+        method,
+        uri,
+        rawBody,
+        timestamp
+      );
+    } else {
+      console.error(
+        "❌ Unknown X-HubSpot-Signature-Version:",
+        signatureVersion
+      );
+      return NextResponse.json(
+        { message: "Unauthorized request" },
+        { status: 400 }
+      );
+    }
+
+    if (!isValid) {
+      console.error("❌ Signature validation failed");
+      return NextResponse.json(
+        { message: "Unauthorized request" },
+        { status: 400 }
+      );
+    }
+
+    console.log("✅ HubSpot request signature validated successfully");
+
+    // ✅ Respond immediately to HubSpot
+    const response = NextResponse.json(
+      { message: "Webhook received, processing in background" },
+      { status: 200 }
+    );
 
     let parsedBody;
     try {
@@ -37,23 +109,14 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    console.log(
-      "🔔 HubSpot Webhook Event Received:",
-      JSON.stringify(parsedBody, null, 2)
-    );
-
-    // ✅ Respond immediately to HubSpot to prevent retries
-    const response = NextResponse.json(
-      { message: "Webhook received, processing in background" },
-      { status: 200 }
-    );
-
-    // forwardWebhookEvent(rawBody);
     // 🚫 Skip processing if the event was triggered by Stripe
-    if (parsedBody[0].changeSource === "INTEGRATION") {
-      console.log("🚫 Skipping HubSpot update because it was triggered by Stripe");
+    if (parsedBody[0]?.changeSource === "INTEGRATION") {
+      console.log(
+        "🚫 Skipping HubSpot update because it was triggered by Stripe"
+      );
       return response;
     }
+
     // 🚀 Process the webhook asynchronously
     processWebhookEvents(parsedBody);
 
@@ -64,114 +127,52 @@ export async function POST(request: NextRequest) {
   }
 }
 
-// 🔄 Background processing function
-// async function processWebhookEvents(parsedBody: any) {
-//   try {
-//     // ✅ Check if webhook events exist
-//     if (!parsedBody || parsedBody.length === 0) {
-//       console.warn("⚠️ No webhook events to process.");
-//       return;
-//     }
+// 🔹 Validate v1 signature
+function validateSignatureV1(signature: string | null, body: string): boolean {
+  if (!signature) return false;
+  const sourceString = CLIENT_SECRET + body;
+  const expectedHash = createHash("sha256").update(sourceString).digest("hex");
+  return signature === expectedHash;
+}
 
-//     // ✅ Sort webhook events: "contact.creation" comes first
-//     parsedBody.sort((a, b) => {
-//       if (a.subscriptionType === "contact.creation") return -1; // Move `contact.creation` up
-//       if (b.subscriptionType === "contact.creation") return 1;
-//       if (a.subscriptionType === "product.creation") return -1; // Move `product.creation` up (after contact)
-//       if (b.subscriptionType === "product.creation") return 1;
-//       return 0; // Keep order otherwise
-//     });
+// 🔹 Validate v2 signature
+function validateSignatureV2(
+  signature: string | null,
+  method: string,
+  uri: string,
+  body: string
+): boolean {
+  if (!signature) return false;
+  const sourceString = `${CLIENT_SECRET}${method}${uri}${body}`;
+  const expectedHash = createHash("sha256").update(sourceString).digest("hex");
+  return signature === expectedHash;
+}
 
-//     // ✅ Extract Portal ID from first event
-//     const portalId = parsedBody[0]?.portalId;
-//     if (!portalId) {
-//       console.error("❌ Missing portal ID in request.");
-//       return;
-//     }
+// 🔹 Validate v3 signature
+function validateSignatureV3(
+  signature: string | null,
+  method: string,
+  uri: string,
+  body: string,
+  timestamp: string
+): boolean {
+  if (!signature) return false;
 
-//     // ✅ Fetch Portal ID from DB to validate
-//     const [rows]: any[] = await pool.query(
-//       `SELECT hubspot_acc FROM user_oauth WHERE hubspot_acc = ?`,
-//       [portalId]
-//     );
+  // Reject if timestamp is older than 5 minutes
+  const MAX_TIMESTAMP_DIFF = 5 * 60 * 1000;
+  const requestTime = parseInt(timestamp, 10);
+  if (Date.now() - requestTime > MAX_TIMESTAMP_DIFF) {
+    console.error("❌ Request timestamp too old, rejecting request");
+    return false;
+  }
 
-//     if (!rows || rows.length === 0) {
-//       console.error(
-//         "❌ Unauthorized HubSpot Account. Portal ID not found:",
-//         portalId
-//       );
-//       return;
-//     }
+  const sourceString = `${method}${uri}${body}${timestamp}`;
+  const expectedHmac = createHmac("sha256", CLIENT_SECRET)
+    .update(sourceString)
+    .digest("base64");
 
-//     // ✅ Process Each Webhook Event
-//     for (const event of parsedBody) {
-//       try {
-//         const {
-//           subscriptionType,
-//           objectId,
-//           propertyName = null,
-//           propertyValue = null,
-//         } = event ?? {};
-
-//         if (!objectId) {
-//           console.warn(`⚠️ Skipping event due to missing objectId:`, event);
-//           continue; // Skip event if objectId is missing
-//         }
-
-//         console.log(`🔹 Event Type: ${subscriptionType}`);
-//         console.log(`🔹 Object ID: ${objectId}`);
-
-//         switch (subscriptionType) {
-//           case "contact.creation":
-//             console.log("✅ Contact Created Event Detected!");
-//             await contactCreated(portalId, objectId);
-//             break;
-
-//           case "contact.deletion":
-//             console.log("🗑️ Contact Deleted Event Detected!");
-//             // Handle deletion logic here
-//             // await contactDeleted(portalId, objectId);
-//             break;
-
-//           case "contact.propertyChange":
-//             console.log("✏️ Contact Property Changed Event Detected!");
-//             await contactUpdated(
-//               portalId,
-//               objectId,
-//               propertyName,
-//               propertyValue
-//             );
-//             break;
-
-//             case "product.creation":
-//             console.log("✅ Product Created Event Detected!");
-//             await productCreated(portalId, objectId);
-//             break;
-
-//             case "product.propertyChange":
-//             console.log("✅ Product Created Event Detected!");
-//             await productUpdated(portalId, objectId, propertyName, propertyValue);
-//             break;
-//             case "deal.creation":
-//             console.log("✅ Product Created Event Detected!");
-//             await dealCreated(portalId, objectId);
-//             break;
-
-//           default:
-//             console.warn("⚠️ Unknown Event Type:", subscriptionType);
-
-//             break;
-//         }
-//       } catch (eventError) {
-//         console.error("❌ Error processing event:", event, eventError);
-//       }
-//     }
-
-//     console.log("✅ Portal ID verified successfully:", portalId);
-//   } catch (error: any) {
-//     console.error("❌ Error in processing webhook events:", error.message);
-//   }
-// }
+  return timingSafeEqual(Buffer.from(expectedHmac), Buffer.from(signature));
+}
 
 async function processWebhookEvents(parsedBody: any) {
   try {
@@ -225,18 +226,23 @@ async function processWebhookEvents(parsedBody: any) {
       return;
     }
 
-
     // ✅ Check if any `.creation` event exists in the array
-    const hasCreationEvent = parsedBody.some(event => event.subscriptionType.endsWith(".creation"));
+    const hasCreationEvent = parsedBody.some((event) =>
+      event.subscriptionType.endsWith(".creation")
+    );
 
     // ✅ Track processed objectIds to ignore further events
     const processedObjects = new Set<string>();
 
-
     // ✅ Process Webhook Events
     for (const event of parsedBody) {
       try {
-        const { subscriptionType, objectId, propertyName = null, propertyValue = null } = event ?? {};
+        const {
+          subscriptionType,
+          objectId,
+          propertyName = null,
+          propertyValue = null,
+        } = event ?? {};
 
         if (!objectId) {
           console.warn(`⚠️ Skipping event due to missing objectId:`, event);
@@ -248,7 +254,9 @@ async function processWebhookEvents(parsedBody: any) {
 
         // ✅ If at least one `.creation` event exists and we already processed this objectId, skip the rest
         if (hasCreationEvent && processedObjects.has(objectId)) {
-          console.log(`⏩ Skipping event because ${objectId} was already processed.`);
+          console.log(
+            `⏩ Skipping event because ${objectId} was already processed.`
+          );
           continue;
         }
 
@@ -279,25 +287,41 @@ async function processWebhookEvents(parsedBody: any) {
 
           case "contact.propertyChange":
             if (hasCreationEvent) {
-              console.log(`⏩ Skipping contact.propertyChange because contact.creation exists.`);
+              console.log(
+                `⏩ Skipping contact.propertyChange because contact.creation exists.`
+              );
               continue;
             }
             console.log("✏️ Contact Property Changed Event Detected!");
-            await contactUpdated(portalId, objectId, propertyName, propertyValue);
+            await contactUpdated(
+              portalId,
+              objectId,
+              propertyName,
+              propertyValue
+            );
             break;
 
           case "product.propertyChange":
             if (hasCreationEvent) {
-              console.log(`⏩ Skipping product.propertyChange because product.creation exists.`);
+              console.log(
+                `⏩ Skipping product.propertyChange because product.creation exists.`
+              );
               continue;
             }
             console.log("✏️ Product Property Changed Event Detected!");
-            await productUpdated(portalId, objectId, propertyName, propertyValue);
+            await productUpdated(
+              portalId,
+              objectId,
+              propertyName,
+              propertyValue
+            );
             break;
 
           case "deal.propertyChange":
             if (hasCreationEvent) {
-              console.log(`⏩ Skipping deal.propertyChange because deal.creation exists.`);
+              console.log(
+                `⏩ Skipping deal.propertyChange because deal.creation exists.`
+              );
               continue;
             }
             console.log("✏️ Deal Property Changed Event Detected!");
@@ -306,16 +330,25 @@ async function processWebhookEvents(parsedBody: any) {
 
           case "company.propertyChange":
             if (hasCreationEvent) {
-              console.log(`⏩ Skipping company.propertyChange because company.creation exists.`);
+              console.log(
+                `⏩ Skipping company.propertyChange because company.creation exists.`
+              );
               continue;
             }
             console.log("✏️ Company Property Changed Event Detected!");
-            await companyUpdated(portalId, objectId, propertyName, propertyValue);
+            await companyUpdated(
+              portalId,
+              objectId,
+              propertyName,
+              propertyValue
+            );
             break;
 
           case "contact.deletion":
             if (hasCreationEvent) {
-              console.log(`⏩ Skipping contact.deletion because contact.creation exists.`);
+              console.log(
+                `⏩ Skipping contact.deletion because contact.creation exists.`
+              );
               continue;
             }
             console.log("🗑️ Contact Deleted Event Detected!");
@@ -324,7 +357,9 @@ async function processWebhookEvents(parsedBody: any) {
 
           case "product.deletion":
             if (hasCreationEvent) {
-              console.log(`⏩ Skipping product.deletion because product.creation exists.`);
+              console.log(
+                `⏩ Skipping product.deletion because product.creation exists.`
+              );
               continue;
             }
             console.log("🗑️ Product Deleted Event Detected!");
@@ -333,7 +368,9 @@ async function processWebhookEvents(parsedBody: any) {
 
           case "company.deletion":
             if (hasCreationEvent) {
-              console.log(`⏩ Skipping company.deletion because company.creation exists.`);
+              console.log(
+                `⏩ Skipping company.deletion because company.creation exists.`
+              );
               continue;
             }
             console.log("🗑️ Company Deleted Event Detected!");
