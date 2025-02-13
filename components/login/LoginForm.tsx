@@ -28,6 +28,9 @@ const LoginForm = () => {
                 if (key !== 'token') {
                     setCookie(null, key, loginUser[key]);
                 }
+                if (key === 'id') {
+                    setCookie(null, 'userId', loginUser[key]);
+                }
             }); // remove token from the response
             setLoading(false);
             message.success('User logged in successfully', 5);

@@ -1,5 +1,7 @@
 "use client";
-import { OnboardingSuccessful } from "@/components/dashboard/stripeOnboardingSuccessful";
+import { OnboardingSuccessful } from "@/components/authorize/stripeOnboardingSuccessful";
+import Footer from "@/components/footer";
+import Header from "@/components/header";
 
 
 export default function successfulOnboarding() {
@@ -8,10 +10,12 @@ export default function successfulOnboarding() {
 
 
   return (
-    
-    <div className="grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20 font-[family-name:var(--font-geist-sans)]">
-     <OnboardingSuccessful/>
-    </div>
-
+    <>
+      <Header />
+      <div className="flex justify-center items-center h-[95vh]">
+        <OnboardingSuccessful />
+      </div>
+      <Footer />
+    </>
   );
 }

@@ -1,0 +1,43 @@
+.stripe-disabled {
+  cursor: not-allowed;
+  background-color: #635bff81;
+  border: 1px solid #635bff81;
+  color: white;
+}
+
+.stripe-disabled:hover {
+  background-color: #635bff81 !important;
+}
+
+.stripe-enabled {
+  background-color: #635bff;
+  border: 1px solid #635bff;
+  color: white;
+}
+
+.stripe-enabled:hover {
+  background-color: #635bff !important;
+}
+
+/* className={`bg-[#FF7A59] border border-[#FF7A59] text-white`} */
+
+.hubspot-disabled {
+  cursor: not-allowed;
+  background-color: #ff7a5981;
+  border: 1px solid #ff7a5981;
+  color: white;
+}
+
+.hubspot-disabled:hover {
+  background-color: #ff7a5981 !important;
+}
+
+.hubspot-enabled {
+  background-color: #ff7a59;
+  border: 1px solid #ff7a59;
+  color: white;
+}
+
+.hubspot-enabled:hover {
+  background-color: #ff7a59 !important;
+}
