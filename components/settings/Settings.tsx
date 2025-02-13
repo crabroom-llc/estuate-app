@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { getPaymentMethod, updatePaymentMethod } from "../api/hubspot/userHubspotData";
 import { Spin } from "antd";
 import { LoadingOutlined } from "@ant-design/icons";
+import Link from "next/link";
 
 const Settings = () => {
     const [savePayment, setSavePayment] = useState(false);
@@ -79,10 +80,10 @@ const Settings = () => {
 
             {/* Save Button */}
             <button
-                className={`px-6 py-2 text-white font-semibold rounded-lg transition ${isChanged ? "bg-blue-600 hover:bg-blue-700" : "bg-gray-400 cursor-not-allowed"
+                className={`px-6 py-2 text-white font-semibold rounded-lg transition ${(isChanged && !noUser) && !loadingButton ? "bg-blue-600 hover:bg-blue-700" : "bg-gray-400 cursor-not-allowed"
                     }`}
                 onClick={handleSave}
-                disabled={!isChanged}
+                disabled={!isChanged || noUser || loadingButton}
             >
                 Save Settings
                 {loadingButton && <Spin indicator={<LoadingOutlined style={{ fontSize: 16, color: "#FFFFFF" }} spin />} className="ml-2" />}
@@ -93,12 +94,7 @@ const Settings = () => {
                     <div className="text-lg font-semibold text-gray-700">
                         No Hubspot Account Found. Please connect your HubSpot account to continue.
                     </div>
-                    <button
-                        onClick={() => window.location.href = "/authorize"}
-                        className="px-6 py-2 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 transition"
-                    >
-                        Connect
-                    </button>
+                    <Link href={'/authorize'} className="border px-4 py-1 leading-6 text-xl rounded-lg border-black hover:border-red-500 hover:text-red-500">Connect</Link>
                 </div>
             )}
 
