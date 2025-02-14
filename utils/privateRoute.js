@@ -5,17 +5,20 @@ import { NextResponse } from 'next/server';
 const privateRoute = async (req) => {
     try {
         const headers = req.headers.get('Authorization');
+        console.log("🚀 => Authorization headers:", headers);
 
         if (!headers) {
             throw new Error('Access Denied: No Authorization header provided');
         }
 
         const token = headers.split(' ')[1];
+        console.log("🚀 => token in private route:", token);
         if (!token) {
             throw new Error('Access Denied: No token provided');
         }
 
         const decoded = jwt.verify(token, process.env.JWT_SECRET);
+        console.log("🚀 => decoded user:", decoded);
         if (!decoded) {
             throw new Error('Access Denied: Invalid token');
         }
@@ -32,7 +35,7 @@ const privateRoute = async (req) => {
         console.error("Authorization Error:", error.message);
 
         return NextResponse.json(
-            { message: error.message || "Unauthorized Access" }, 
+            { message: error.message || "Unauthorized Access" },
             { status: 401 }
         );
     }
