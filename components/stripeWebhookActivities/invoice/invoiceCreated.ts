@@ -1,13 +1,10 @@
 import {
-    updateHubSpotContact,
-    fetchHubSpotContact,
-    createHubSpotDealPropertyPaymentPaidDate,
-    updateHubSpotDealPaymentStatus,
+    updateHubSpotDealPaymentStatus,appendInvoiceToHubSpotHistory
 } from "@/components/hubspotActions/hubspotActions";
-import { checkPaymentMethod, createStripeCustomer, fetchStripeInvoice } from "@/components/stripeActions/stripeActions";
+import { checkPaymentMethod, fetchStripeInvoice } from "@/components/stripeActions/stripeActions";
 import { getStripeTokens } from "@/components/hubspotWebhookActivities/gettokens";
 import fs from 'fs';
-const invoicePaid = async (portalId: any, objectId: any) => {
+const invoiceCreated = async (portalId: any, objectId: any) => {
     try {
         const tokens = await getStripeTokens(portalId);
 
@@ -29,7 +26,7 @@ const invoicePaid = async (portalId: any, objectId: any) => {
         }
         // const dealId = invoice?.subscription_details?.metadata?.deal_id;
         const dealId = invoice?.subscription_details?.metadata?.deal_id || invoice?.metadata?.deal_id; 
-        const paymentPaidDate = invoice?.status_transitions?.paid_at;
+        const paymentPaidDate = invoice?.created;
         const paymentStatus = invoice?.status;
         const invoice_id = objectId;
         console.log("🔹 Deal ID:", dealId)
@@ -39,10 +36,10 @@ const invoicePaid = async (portalId: any, objectId: any) => {
         // 🔹 Step 5: Add a new property in hubspot deal
         // await createHubSpotDealPropertyPaymentPaidDate(new_hubspot_access_token)
 
-        await checkPaymentMethod(portalId, new_stripeAccessToken,invoice_id);
+        // await checkPaymentMethod(portalId, new_stripeAccessToken,invoice_id);
         // 🔹 Step 6: Update the deal in HubSpot
         if (dealId && paymentStatus && paymentPaidDate) {
-            await updateHubSpotDealPaymentStatus(dealId, invoice_id, paymentStatus, paymentPaidDate, new_hubspot_access_token);
+            await appendInvoiceToHubSpotHistory(dealId, invoice_id, paymentStatus, paymentPaidDate, new_hubspot_access_token);
         } else {
             console.error("❌ Deal ID is undefined.");
         }
@@ -52,4 +49,4 @@ const invoicePaid = async (portalId: any, objectId: any) => {
     }
 };
 
-export { invoicePaid };
+export { invoiceCreated };

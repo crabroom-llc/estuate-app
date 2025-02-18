@@ -1,7 +1,7 @@
 import { getTokens } from "@/components/hubspotWebhookActivities/gettokens";
 import {
   fetchProduct,
-  updateHubSpotProduct,
+  updateHubSpotProduct,createusuagebasedHubSpotProperties
 } from "@/components/hubspotActions/hubspotActions";
 import { createProduct } from "@/components/stripeActions/stripeActions";
 
@@ -22,7 +22,13 @@ const productCreated = async (portalId, objectId) => {
       console.error("❌ No product data found for HubSpot ID:", objectId);
       return null;
     }
+    const productDescription = productData?.properties?.description;
 
+    if (productDescription?.includes("usuagebased")) {
+      console.log("The description contains 'usagebased'.");
+      await createusuagebasedHubSpotProperties(new_hubspot_access_token);  
+  }
+    console.log("🔹 Product Data:", productData?.properties?.description);
     const stripeProductResponse = await createProduct(
       new_stripeAccessToken,
       productData

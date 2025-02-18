@@ -6,6 +6,8 @@ const HUBSPOT_CLIENT_ID = process.env.HUBSPOT_CLIENT_ID;
 const HUBSPOT_CLIENT_SECRET = process.env.HUBSPOT_CLIENT_SECRET;
 
 const gethubspotaccesstoken = async (refreshToken: string) => {
+  console.log("inside get hubspot access token");
+  
   try {
     const response = await axios.post(
       "https://api.hubapi.com/oauth/v1/token",
@@ -35,6 +37,7 @@ const gethubspotaccesstokenWebhook = async (
   refreshToken: string,
   hubspot_access_token: string
 ) => {
+  console.log("inside get connection");
   let connection;
   try {
     connection = await pool.getConnection();
@@ -103,6 +106,7 @@ const gethubspotaccesstokenWebhook = async (
       return existingToken;
     }
   } catch (error) {
+    console.log(error);
     console.error("❌ Error refreshing HubSpot token:", error);
     return null;
   }

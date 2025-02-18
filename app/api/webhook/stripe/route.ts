@@ -9,6 +9,7 @@ import { companyUpdated } from "@/components/hubspotWebhookActivities/company/co
 import { companyDeleted } from "@/components/hubspotWebhookActivities/company/companyDeleted";
 import { productDeleted } from "@/components/hubspotWebhookActivities/product/productDeleted";
 import { invoicePaid } from "@/components/stripeWebhookActivities/invoice/invoicePaid";
+import { invoiceCreated } from "@/components/stripeWebhookActivities/invoice/invoiceCreated";
 import { customerUpdate } from "@/components/stripeWebhookActivities/customer/customerUpdate";
 import { companyUpdate } from "@/components/stripeWebhookActivities/company/companyUpdate";
 import { productUpdate } from "@/components/stripeWebhookActivities/product/productUpdated";
@@ -71,7 +72,7 @@ export async function POST(request: NextRequest) {
             { status: 200 }
         );
         
-        if (event.request?.idempotency_key?.startsWith("stripe-node-retry")) {
+        if (event.request?.idempotency_key?.startsWith("stripe-node-retry") && event.type !='invoice.paid') {
             console.log("🚫 Skipping Stripe update because it was triggered by HubSpot");
             return response;
         }
@@ -134,6 +135,10 @@ async function processWebhookEvents(event: any) {
                 case "invoice.paid":
                     console.log("✅ Invoice Paid Event Detected!");
                     await invoicePaid(accountId, objectId);
+                    break;
+                case "invoice.created":
+                    console.log("✅ Invoice Paid Event Detected!");
+                    await invoiceCreated(accountId, objectId);
                     break;
 
                 case "customer.updated":

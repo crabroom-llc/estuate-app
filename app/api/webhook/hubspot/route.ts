@@ -17,9 +17,9 @@ const CLIENT_SECRET = process.env.HUBSPOT_CLIENT_SECRET || "";
 
 export async function POST(request: NextRequest) {
   try {
-    console.log(
-      JSON.stringify(Object.fromEntries(request.headers.entries()), null, 2)
-    );
+    // console.log(
+    //   JSON.stringify(Object.fromEntries(request.headers.entries()), null, 2)
+    // );
 
     const rawBody = await request.text();
     if (!rawBody) {
@@ -213,10 +213,7 @@ async function processWebhookEvents(parsedBody: any) {
     }
 
     // ✅ Validate Portal ID in DB
-    const [rows]: any[] = await pool.query(
-      `SELECT hubspot_acc FROM user_oauth WHERE hubspot_acc = ?`,
-      [portalId]
-    );
+    const [rows]: any[] = await pool.query(`SELECT 1 FROM user_oauth WHERE hubspot_acc = ? LIMIT 1`, [portalId]);
 
     if (!rows || rows.length === 0) {
       console.error(

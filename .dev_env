@@ -1,0 +1,23 @@
+JWT_SECRET=trustmebro
+STRIPE_CLIENT_ID =ca_RlfZQpltIYFKgCQfCEYCBCbQbkq0JHCG
+STRIPE_REDIRECT_URI =http://localhost:3000/stripeonboardingsuccessful
+STRIPE_CLIENT_SECRET=sk_test_51Qs8Dw4J7EULAuhbADAM589VJ0SseC8KmK5clJTipjcmRl5qB5YDXHwEMVXgEi8kUWzit5P7ILKpf4aU3WyMiHwC00H0oDXYK4
+MYSQL_HOST=127.0.0.1
+MYSQL_USER=root
+MYSQL_PASSWORD=Stripe@Hubspot123
+MYSQL_DATABASE=estuate
+MYSQL_PORT= 3306
+STRIPE_TOKEN_URL=https://connect.stripe.com/oauth/token
+STRIPE_WEBHOOK_SECRET=whsec_XSBVJxguh2FwvWEqDj9svfMFN1E4f0cE
+
+# hubspot access
+HUBSPOT_CLIENT_ID=5eb8090b-fb9d-4890-99b8-f1c320d75aaf
+HUBSPOT_CLIENT_SECRET=ad6f6ec4-6a71-464a-9dac-17fd13cc572e
+HUBSPOT_REDIRECT_URI=http://localhost:3000/hubspotonboardingsuccessful
+HUBSPOT_AUTH_URL=https://app.hubspot.com/oauth/authorize
+HUBSPOT_TOKEN_URL=https://api.hubapi.com/oauth/v1/token
+
+HUBSPOT_SCOPE=crm.schemas.companies.write%20crm.schemas.contacts.write%20crm.schemas.deals.read%20crm.schemas.deals.write%20oauth%20crm.schemas.invoices.read%20crm.objects.contacts.write%20e-commerce%20crm.objects.companies.write%20crm.objects.companies.read%20crm.objects.deals.read%20crm.schemas.contacts.read%20crm.objects.deals.write%20crm.objects.contacts.read%20crm.schemas.companies.read%20crm.schemas.contacts.write
+
+
+

@@ -17,3 +17,5 @@ export function getCookie(ctx = null, key) {
     const cookies = nookies.get(ctx); // Retrieve cookies
     return cookies[key] || false; // Return session ID or null
 }
+
+

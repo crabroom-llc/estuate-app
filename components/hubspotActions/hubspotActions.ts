@@ -206,7 +206,7 @@ const fetchProduct = async (productId: string, hubspotAccessToken: string) => {
       },
       params: {
         properties:
-          "name,price,sku,description,billing_frequency,createdate,hs_lastmodifieddate",
+          "name,price,sku,description,billing_frequency,createdate,hs_lastmodifieddate,recurringbillingfrequency",
       },
     });
 
@@ -348,7 +348,7 @@ const fetchProductandPricesById = async (
       },
       params: {
         properties:
-          "name,price,sku,description,billing_frequency,createdate,hs_lastmodifieddate,stripe_product_id,stripe_price_id",
+          "name,price,sku,description,billing_frequency,createdate,hs_lastmodifieddate,stripe_product_id,stripe_price_id,recurringbillingfrequency",
       },
     });
 
@@ -1350,41 +1350,343 @@ const checkHubSpotDealProperties = async (hubspotAccessToken) => {
   }
 };
 
+
+
+
+// Function to ensure "stripe_invoice_history" property exists in HubSpot
+async function ensureInvoiceHistoryPropertyExists(hubspotAccessToken) {
+  const propertiesUrl = "https://api.hubapi.com/crm/v3/properties/deal";
+
+  try {
+      // Fetch all properties in HubSpot Deals
+      const response = await axios.get(propertiesUrl, {
+          headers: {
+              Authorization: `Bearer ${hubspotAccessToken}`,
+              "Content-Type": "application/json",
+          },
+      });
+
+      const existingProperties = response.data.results.map(prop => prop.name);
+
+      if (!existingProperties.includes("stripe_invoice_history")) {
+          console.log("🔹 Creating 'stripe_invoice_history' property in HubSpot...");
+
+          const propertyData = {
+              name: "stripe_invoice_history",
+              label: "Stripe Invoice History",
+              type: "string",
+              fieldType: "textarea",
+              groupName: "dealinformation",
+              description: "Stores the history of all Stripe invoices related to this deal",
+          };
+
+          await axios.post(propertiesUrl, propertyData, {
+              headers: {
+                  Authorization: `Bearer ${hubspotAccessToken}`,
+                  "Content-Type": "application/json",
+              },
+          });
+
+          console.log("✅ 'stripe_invoice_history' property created in HubSpot.");
+      } else {
+          console.log("ℹ️ 'stripe_invoice_history' property already exists in HubSpot.");
+      }
+  } catch (error:any) {
+      console.error("❌ Error checking/creating property in HubSpot:", error.response?.data || error.message);
+  }
+}
+
+
+
+
+
+// const updateHubSpotDeal = async (
+//   dealId,
+//   subscriptionIds,
+//   invoiceIds,
+//   hubspotAccessToken
+// ) => {
+//   console.log(`🔹 Processing HubSpot Deal Update for Deal ID: ${dealId}`);
+
+//   // Ensure properties exist before updating
+//   await createInvoiceAndSubscriptionIdsOnHubspot(hubspotAccessToken);
+
+//   await ensureInvoiceHistoryPropertyExists(hubspotAccessToken);
+  
+
+//   try {
+//     const updateData = { properties: {} };
+
+//     if (subscriptionIds.length > 0) {
+//       updateData.properties["stripe_subscription_id"] =
+//         subscriptionIds.join(", ");
+//     }
+//     if (invoiceIds.length > 0) {
+//       updateData.properties["stripe_invoice_id"] = invoiceIds.join(", ");
+//     }
+//     // if (productIds.length > 0) {
+//     //   updateData.properties["stripe_product_id"] = productIds.join(", ");
+//     // }
+//     // if (priceIds.length > 0) {
+//     //   updateData.properties["stripe_price_id"] = priceIds.join(", ");
+//     // }
+
+//     if (Object.keys(updateData.properties).length === 0) {
+//       console.log(
+//         "⚠️ No subscription, invoice, product, or price ID to update."
+//       );
+//       return;
+//     }
+
+//     const url = `https://api.hubapi.com/crm/v3/objects/deals/${dealId}`;
+//     await axios.patch(url, updateData, {
+//       headers: {
+//         Authorization: `Bearer ${hubspotAccessToken}`,
+//         "Content-Type": "application/json",
+//       },
+//     });
+
+//     console.log(`✅ Updated HubSpot deal ${dealId} with Stripe IDs`);
+//   } catch (error: any) {
+//     console.error(
+//       `❌ Error updating HubSpot deal ${dealId}:`,
+//       error.response?.data || error.message
+//     );
+//   }
+// };
+
+//new code
+
+
+
+// const updateHubSpotDeal = async (
+//   dealId: string,
+//   subscriptionIds: { id: string; created_at: string }[],
+//   invoiceIds: { id: string; created_at: string }[],
+//   hubspotAccessToken: string
+// ) => {
+//   console.log(`🔹 Processing HubSpot Deal Update for Deal ID: ${dealId}`);
+
+//   // Ensure properties exist before updating
+//   await createInvoiceAndSubscriptionIdsOnHubspot(hubspotAccessToken);
+//   await ensureInvoiceHistoryPropertyExists(hubspotAccessToken);
+
+//   try {
+//     const updateData: { properties: any } = { properties: {} };
+
+//     // ✅ Update Subscriptions: Only Subscription IDs
+//     if (subscriptionIds.length > 0) {
+//       updateData.properties["stripe_subscription_id"] = subscriptionIds
+//         .map((sub) => sub.id)
+//         .join(", ");
+//     }
+
+//     // ✅ Update Invoices: Only Invoice IDs
+//     if (invoiceIds.length > 0) {
+//       updateData.properties["stripe_invoice_id"] = invoiceIds
+//         .map((inv) => inv.id)
+//         .join(", ");
+//     }
+
+//     // ✅ Update Invoice History in JSON Format
+//     if (invoiceIds.length > 0) {
+//       const invoiceHistory = invoiceIds.map((inv) => ({
+//         invoice_id: inv.id,
+//         status: "finalized", // ✅ Always "finalized"
+//         created_date: inv.created_at, // ✅ ISO 8601 UTC format
+//       }));
+
+//       updateData.properties["stripe_invoice_history"] = JSON.stringify(invoiceHistory);
+//     }
+
+//     // ✅ Check if there is anything to update
+//     if (Object.keys(updateData.properties).length === 0) {
+//       console.log("⚠️ No subscription, invoice, or invoice history to update.");
+//       return;
+//     }
+
+//     // ✅ Send the Update Request to HubSpot
+//     const url = `https://api.hubapi.com/crm/v3/objects/deals/${dealId}`;
+//     await axios.patch(url, updateData, {
+//       headers: {
+//         Authorization: `Bearer ${hubspotAccessToken}`,
+//         "Content-Type": "application/json",
+//       },
+//     });
+
+//     console.log(`✅ Successfully updated HubSpot deal ${dealId} with Stripe IDs and structured invoice history.`);
+//   } catch (error: any) {
+//     console.error(`❌ Error updating HubSpot deal ${dealId}:`, error.response?.data || error.message);
+//   }
+// };
+
+
+
+// const updateHubSpotDeal = async (
+//   dealId: string,
+//   subscriptionIds: { id: string; created_at: string }[],
+//   invoiceIds: { id: string; created_at: string }[],
+//   hubspotAccessToken: string
+// ) => {
+//   console.log(`🔹 Processing HubSpot Deal Update for Deal ID: ${dealId}`);
+
+//   // Ensure properties exist before updating
+//   await createInvoiceAndSubscriptionIdsOnHubspot(hubspotAccessToken);
+//   await ensureInvoiceHistoryPropertyExists(hubspotAccessToken);
+
+//   try {
+//     const updateData: { properties: any } = { properties: {} };
+
+//     // ✅ Update Subscriptions: Only Subscription IDs
+//     if (subscriptionIds.length > 0) {
+//       updateData.properties["stripe_subscription_id"] = subscriptionIds
+//         .map((sub) => sub.id)
+//         .join(", ");
+//     }
+
+//     // ✅ Update Invoices: Only Invoice IDs
+//     if (invoiceIds.length > 0) {
+//       updateData.properties["stripe_invoice_id"] = invoiceIds
+//         .map((inv) => inv.id)
+//         .join(", ");
+//     }
+
+//     // ✅ Fetch existing invoice history from HubSpot
+//     const getUrl = `https://api.hubapi.com/crm/v3/objects/deals/${dealId}`;
+//     const dealResponse = await axios.get(getUrl, {
+//       headers: {
+//         Authorization: `Bearer ${hubspotAccessToken}`,
+//         "Content-Type": "application/json",
+//       },
+//       params: { properties: "stripe_invoice_history" },
+//     });
+
+//     let existingInvoiceHistory: any[] = [];
+
+//     // ✅ Parse existing invoice history if available
+//     if (dealResponse.data.properties.stripe_invoice_history) {
+//       try {
+//         existingInvoiceHistory = JSON.parse(dealResponse.data.properties.stripe_invoice_history);
+//       } catch (error) {
+//         console.warn("⚠️ Failed to parse existing invoice history. Resetting to empty array.");
+//         existingInvoiceHistory = [];
+//       }
+//     }
+
+//     // ✅ Merge New Invoices with Existing History (Avoid Duplicates)
+//     invoiceIds.forEach((inv) => {
+//       const existingIndex = existingInvoiceHistory.findIndex((record) => record.includes(inv.id));
+      
+//       if (existingIndex !== -1) {
+//         // ✅ If invoice exists, update status to 'paid'
+//         existingInvoiceHistory[existingIndex] = `${inv.created_at} ${inv.id} paid`;
+//       } else {
+//         // ✅ If invoice is new, add it to the history
+//         existingInvoiceHistory.push(`${inv.created_at} ${inv.id} finalized`);
+//       }
+//     });
+
+//     // ✅ Save the updated invoice history in HubSpot
+//     updateData.properties["stripe_invoice_history"] = JSON.stringify(existingInvoiceHistory);
+
+//     // ✅ Check if there is anything to update
+//     if (Object.keys(updateData.properties).length === 0) {
+//       console.log("⚠️ No subscription, invoice, or invoice history to update.");
+//       return;
+//     }
+
+//     // ✅ Send the Update Request to HubSpot
+//     const url = `https://api.hubapi.com/crm/v3/objects/deals/${dealId}`;
+//     await axios.patch(url, updateData, {
+//       headers: {
+//         Authorization: `Bearer ${hubspotAccessToken}`,
+//         "Content-Type": "application/json",
+//       },
+//     });
+
+//     console.log(`✅ Successfully updated HubSpot deal ${dealId} with formatted invoice history.`);
+//   } catch (error: any) {
+//     console.error(`❌ Error updating HubSpot deal ${dealId}:`, error.response?.data || error.message);
+//   }
+// };
+
+
 const updateHubSpotDeal = async (
-  dealId,
-  subscriptionIds,
-  invoiceIds,
-  hubspotAccessToken
+  dealId: string,
+  subscriptionIds: { id: string; created_at: string }[],
+  invoiceIds: { id: string; created_at: string; payment_date?: string }[], // ✅ Added optional payment_date
+  hubspotAccessToken: string
 ) => {
   console.log(`🔹 Processing HubSpot Deal Update for Deal ID: ${dealId}`);
 
   // Ensure properties exist before updating
   await createInvoiceAndSubscriptionIdsOnHubspot(hubspotAccessToken);
+  await ensureInvoiceHistoryPropertyExists(hubspotAccessToken);
 
   try {
-    const updateData = { properties: {} };
+    const updateData: { properties: any } = { properties: {} };
 
+    // ✅ Update Subscriptions: Only Subscription IDs
     if (subscriptionIds.length > 0) {
-      updateData.properties["stripe_subscription_id"] =
-        subscriptionIds.join(", ");
+      updateData.properties["stripe_subscription_id"] = subscriptionIds
+        .map((sub) => sub.id)
+        .join(", ");
     }
-    if (invoiceIds.length > 0) {
-      updateData.properties["stripe_invoice_id"] = invoiceIds.join(", ");
-    }
-    // if (productIds.length > 0) {
-    //   updateData.properties["stripe_product_id"] = productIds.join(", ");
-    // }
-    // if (priceIds.length > 0) {
-    //   updateData.properties["stripe_price_id"] = priceIds.join(", ");
-    // }
 
+    // ✅ Update Invoices: Only Invoice IDs
+    if (invoiceIds.length > 0) {
+      updateData.properties["stripe_invoice_id"] = invoiceIds
+        .map((inv) => inv.id)
+        .join(", ");
+    }
+
+    // ✅ Fetch existing invoice history from HubSpot
+    const getUrl = `https://api.hubapi.com/crm/v3/objects/deals/${dealId}`;
+    const dealResponse = await axios.get(getUrl, {
+      headers: {
+        Authorization: `Bearer ${hubspotAccessToken}`,
+        "Content-Type": "application/json",
+      },
+      params: { properties: "stripe_invoice_history" },
+    });
+
+    let existingInvoiceHistory: any[] = [];
+
+    // ✅ Parse existing invoice history if available
+    if (dealResponse.data.properties.stripe_invoice_history) {
+      try {
+        existingInvoiceHistory = JSON.parse(dealResponse.data.properties.stripe_invoice_history);
+      } catch (error) {
+        console.warn("⚠️ Failed to parse existing invoice history. Resetting to empty array.");
+        existingInvoiceHistory = [];
+      }
+    }
+
+    // ✅ Merge New Invoices with Existing History (Avoid Duplicates)
+    invoiceIds.forEach((inv) => {
+      const existingIndex = existingInvoiceHistory.findIndex((record) => record.includes(inv.id));
+      
+      if (existingIndex !== -1) {
+        // ✅ If invoice exists, update status to 'paid' and append payment_date if available
+        existingInvoiceHistory[existingIndex] = inv.payment_date
+          ? `${inv.created_at} ${inv.id} paid ${inv.payment_date}` // ✅ Include payment date
+          : `${inv.created_at} ${inv.id} paid`; // ✅ No payment date available
+      } else {
+        // ✅ If invoice is new, add it to the history as "finalized"
+        existingInvoiceHistory.push(`${inv.created_at} ${inv.id} open`);
+      }
+    });
+
+    // ✅ Save the updated invoice history in HubSpot
+    updateData.properties["stripe_invoice_history"] = JSON.stringify(existingInvoiceHistory);
+
+    // ✅ Check if there is anything to update
     if (Object.keys(updateData.properties).length === 0) {
-      console.log(
-        "⚠️ No subscription, invoice, product, or price ID to update."
-      );
+      console.log("⚠️ No subscription, invoice, or invoice history to update.");
       return;
     }
 
+    // ✅ Send the Update Request to HubSpot
     const url = `https://api.hubapi.com/crm/v3/objects/deals/${dealId}`;
     await axios.patch(url, updateData, {
       headers: {
@@ -1393,16 +1695,13 @@ const updateHubSpotDeal = async (
       },
     });
 
-    console.log(`✅ Updated HubSpot deal ${dealId} with Stripe IDs`);
+    console.log(`✅ Successfully updated HubSpot deal ${dealId} with formatted invoice history.`);
   } catch (error: any) {
-    console.error(
-      `❌ Error updating HubSpot deal ${dealId}:`,
-      error.response?.data || error.message
-    );
+    console.error(`❌ Error updating HubSpot deal ${dealId}:`, error.response?.data || error.message);
   }
 };
 
-//new code
+
 
 const checkHubSpotCompanyProperty = async (hubspotAccessToken) => {
   try {
@@ -1582,20 +1881,101 @@ const updateHubSpotCompany = async (
   }
 };
 
+// const updateHubSpotDealPaymentStatus = async (
+//   dealId,
+//   paymentStatus,
+//   paymentPaidDate,
+//   hubspotAccessToken
+// ) => {
+//   console.log("🚀 => dealId:", dealId);
+//   try {
+//     const response = await axios.patch(
+//       `https://api.hubapi.com/crm/v3/objects/deals/${dealId}`,
+//       {
+//         properties: {
+//           payment_status: paymentStatus,
+//           payment_paid_date: paymentPaidDate,
+//         },
+//       },
+//       {
+//         headers: {
+//           Authorization: `Bearer ${hubspotAccessToken}`,
+//           "Content-Type": "application/json",
+//         },
+//       }
+//     );
+
+//     console.log("✅ HubSpot Deal Updated with Payment Status:", response.data);
+//     return response.data;
+//   } catch (error: any) {
+//     console.error(
+//       "❌ Error updating HubSpot deal:",
+//       error.response?.data || error.message
+//     );
+//   }
+// };
+
+//
+
+
 const updateHubSpotDealPaymentStatus = async (
-  dealId,
-  paymentStatus,
-  paymentPaidDate,
-  hubspotAccessToken
+  dealId: string,
+  invoiceId: string,
+  newStatus: string,
+  paymentDate: number, // ✅ Ensure it's a timestamp
+  hubspotAccessToken: string
 ) => {
-  console.log("🚀 => dealId:", dealId);
+  console.log(`🔹 Updating Invoice History in HubSpot for Deal ID: ${dealId}`);
+
   try {
-    const response = await axios.patch(
-      `https://api.hubapi.com/crm/v3/objects/deals/${dealId}`,
+    // ✅ Step 1: Fetch Existing `stripe_invoice_history`
+    const getUrl = `https://api.hubapi.com/crm/v3/objects/deals/${dealId}`;
+    const dealResponse = await axios.get(getUrl, {
+      headers: {
+        Authorization: `Bearer ${hubspotAccessToken}`,
+        "Content-Type": "application/json",
+      },
+      params: { properties: "stripe_invoice_history" },
+    });
+
+    let invoiceHistory: string[] = [];
+
+    if (dealResponse.data.properties.stripe_invoice_history) {
+      try {
+        invoiceHistory = JSON.parse(dealResponse.data.properties.stripe_invoice_history);
+      } catch (error) {
+        console.warn("⚠️ Failed to parse existing invoice history. Resetting to empty array.");
+        invoiceHistory = [];
+      }
+    }
+
+    // ✅ Step 2: Convert `paymentDate` to ISO 8601 Format
+    const formattedPaymentDate = new Date(paymentDate * 1000).toISOString(); // ✅ Convert timestamp to UTC
+
+    // ✅ Step 3: Find the Invoice & Update Status & Payment Date
+    let invoiceFound = false;
+    invoiceHistory = invoiceHistory.map((invoiceEntry) => {
+      const parts = invoiceEntry.split(" "); // ✅ Split the stored string format
+      if (parts.length >= 3 && parts[1] === invoiceId) { // ✅ Extract invoice_id correctly
+        invoiceFound = true;
+        return `${parts[0]} ${parts[1]} ${newStatus} ${formattedPaymentDate}`; // ✅ Update status & append payment_date
+      }
+      return invoiceEntry;
+    });
+
+    // ✅ Step 4: If the invoice was not found, do nothing
+    if (!invoiceFound) {
+      console.log(`⚠️ Invoice ID ${invoiceId} not found in HubSpot history. No update made.`);
+      return;
+    }
+
+    // ✅ Step 5: Send Updated Invoice History Back to HubSpot
+    const updateUrl = `https://api.hubapi.com/crm/v3/objects/deals/${dealId}`;
+    const updateResponse = await axios.patch(
+      updateUrl,
       {
         properties: {
-          payment_status: paymentStatus,
-          payment_paid_date: paymentPaidDate,
+          stripe_invoice_history: JSON.stringify(invoiceHistory), // ✅ Save as JSON
         },
       },
       {
@@ -1606,17 +1986,75 @@ const updateHubSpotDealPaymentStatus = async (
       }
     );
 
-    console.log("✅ HubSpot Deal Updated with Payment Status:", response.data);
-    return response.data;
+    console.log(`✅ Successfully updated invoice ${invoiceId} in HubSpot deal ${dealId}.`);
+    return updateResponse.data;
   } catch (error: any) {
-    console.error(
-      "❌ Error updating HubSpot deal:",
-      error.response?.data || error.message
-    );
+    console.error("❌ Error updating HubSpot deal:", error.response?.data || error.message);
   }
 };
 
-//
+
+const appendInvoiceToHubSpotHistory = async (
+  dealId: string,
+  invoiceId: string,
+  status: string,
+  timestamp: number, // ✅ Ensure it's a timestamp
+  hubspotAccessToken: string
+) => {
+  console.log(`🔹 Appending Invoice to History for Deal ID: ${dealId}`);
+
+  try {
+    // ✅ Step 1: Fetch Existing `stripe_invoice_history`
+    const getUrl = `https://api.hubapi.com/crm/v3/objects/deals/${dealId}`;
+    const dealResponse = await axios.get(getUrl, {
+      headers: {
+        Authorization: `Bearer ${hubspotAccessToken}`,
+        "Content-Type": "application/json",
+      },
+      params: { properties: "stripe_invoice_history" },
+    });
+
+    let invoiceHistory: string[] = [];
+
+    if (dealResponse.data.properties.stripe_invoice_history) {
+      try {
+        invoiceHistory = JSON.parse(dealResponse.data.properties.stripe_invoice_history);
+      } catch (error) {
+        console.warn("⚠️ Failed to parse existing invoice history. Resetting to empty array.");
+        invoiceHistory = [];
+      }
+    }
+
+    // ✅ Step 2: Convert `timestamp` to ISO 8601 Format
+    const formattedTimestamp = new Date(timestamp * 1000).toISOString(); // ✅ Convert timestamp to UTC
+
+    // ✅ Step 3: Append New Invoice Data
+    invoiceHistory.push(`${formattedTimestamp} ${invoiceId} ${status}`);
+
+    // ✅ Step 4: Send Updated Invoice History Back to HubSpot
+    const updateUrl = `https://api.hubapi.com/crm/v3/objects/deals/${dealId}`;
+    const updateResponse = await axios.patch(
+      updateUrl,
+      {
+        properties: {
+          stripe_invoice_history: JSON.stringify(invoiceHistory), // ✅ Save as JSON
+        },
+      },
+      {
+        headers: {
+          Authorization: `Bearer ${hubspotAccessToken}`,
+          "Content-Type": "application/json",
+        },
+      }
+    );
+
+    console.log(`✅ Successfully appended invoice ${invoiceId} to HubSpot deal ${dealId}.`);
+    return updateResponse.data;
+  } catch (error: any) {
+    console.error("❌ Error appending invoice to HubSpot deal:", error.response?.data || error.message);
+  }
+};
+
 
 const fetchdealStripedetailById = async (dealId, hubspotAccessToken) => {
   try {
@@ -1636,9 +2074,6 @@ const fetchdealStripedetailById = async (dealId, hubspotAccessToken) => {
     console.log("error is:->" + error);
   }
 };
-
-
-
 
 
 // ✅ Function to Update Contact in HubSpot in from Stripe
@@ -1721,6 +2156,289 @@ const updateHubSpotProductFromStripe = async (
 }
 
 
+
+//usuage based setup code
+
+
+
+
+
+const createHubSpotProductPropertyPackagePrice = async (hubspotAccessToken: string) => {
+  try {
+      const response = await axios.post(
+          `https://api.hubapi.com/crm/v3/properties/products`,
+          {
+              name: "package_price",
+              label: "Package Price",
+              type: "number",
+              fieldType: "number",
+              groupName: "productinformation",
+              description: "Total price of a prepaid package",
+              displayOrder: -1,
+              hasUniqueValue: false,
+              hidden: false,
+              formField: true,
+          },
+          {
+              headers: {
+                  Authorization: `Bearer ${hubspotAccessToken}`,
+                  "Content-Type": "application/json",
+              },
+          }
+      );
+
+      console.log("✅ Custom Property `package_price` Created:", response.data);
+      return response.data;
+  } catch (error: any) {
+      console.error(
+          "❌ Error creating HubSpot product property:",
+          error.response?.data || error.message
+      );
+  }
+};
+
+
+
+const createHubSpotProductPropertyBillingType = async (hubspotAccessToken: string) => {
+  try {
+      const response = await axios.post(
+          `https://api.hubapi.com/crm/v3/properties/products`,
+          {
+              name: "billing_type",
+              label: "Billing Type",
+              type: "enumeration",
+              fieldType: "select",
+              groupName: "productinformation",
+              options: [
+                  { label: "One-time", value: "one_time" },
+                  { label: "Recurring", value: "recurring" },
+                  { label: "Usage-Based", value: "usagebased" },
+              ],
+              description: "Defines the billing type of the product",
+              displayOrder: -1,
+              hasUniqueValue: false,
+              hidden: false,
+              formField: true,
+          },
+          {
+              headers: {
+                  Authorization: `Bearer ${hubspotAccessToken}`,
+                  "Content-Type": "application/json",
+              },
+          }
+      );
+
+      console.log("✅ Custom Property `billing_type` Created:", response.data);
+      return response.data;
+  } catch (error: any) {
+      console.error(
+          "❌ Error creating HubSpot product property:",
+          error.response?.data || error.message
+      );
+  }
+};
+
+
+
+const createHubSpotProductPropertyUsageModel = async (hubspotAccessToken: string) => {
+  try {
+      const response = await axios.post(
+          `https://api.hubapi.com/crm/v3/properties/products`,
+          {
+              name: "usage_model",
+              label: "Usage Model",
+              type: "enumeration",
+              fieldType: "select",
+              groupName: "productinformation",
+              options: [
+                  { label: "Per Unit", value: "per_unit" },
+                  { label: "Per Package", value: "per_package" },
+                  { label: "Per Tier", value: "per_tier" },
+              ],
+              description: "Defines how the usage is billed",
+              displayOrder: -1,
+              hasUniqueValue: false,
+              hidden: false,
+              formField: true,
+          },
+          {
+              headers: {
+                  Authorization: `Bearer ${hubspotAccessToken}`,
+                  "Content-Type": "application/json",
+              },
+          }
+      );
+
+      console.log("✅ Custom Property `usage_model` Created:", response.data);
+      return response.data;
+  } catch (error: any) {
+      console.error(
+          "❌ Error creating HubSpot product property:",
+          error.response?.data || error.message
+      );
+  }
+};
+
+
+const createHubSpotProductPropertyUnitPrice = async (hubspotAccessToken: string) => {
+  try {
+      const response = await axios.post(
+          `https://api.hubapi.com/crm/v3/properties/products`,
+          {
+              name: "unit_price",
+              label: "Unit Price",
+              type: "number",
+              fieldType: "number",
+              groupName: "productinformation",
+              description: "Cost per unit for usage-based billing",
+              displayOrder: -1,
+              hasUniqueValue: false,
+              hidden: false,
+              formField: true,
+          },
+          {
+              headers: {
+                  Authorization: `Bearer ${hubspotAccessToken}`,
+                  "Content-Type": "application/json",
+              },
+          }
+      );
+
+      console.log("✅ Custom Property `unit_price` Created:", response.data);
+      return response.data;
+  } catch (error: any) {
+      console.error(
+          "❌ Error creating HubSpot product property:",
+          error.response?.data || error.message
+      );
+  }
+};
+
+
+const createHubSpotProductPropertyPackageUnits = async (hubspotAccessToken: string) => {
+  try {
+      const response = await axios.post(
+          `https://api.hubapi.com/crm/v3/properties/products`,
+          {
+              name: "package_units",
+              label: "Package Units",
+              type: "number",
+              fieldType: "number",
+              groupName: "productinformation",
+              description: "Number of units in a package",
+              displayOrder: -1,
+              hasUniqueValue: false,
+              hidden: false,
+              formField: true,
+          },
+          {
+              headers: {
+                  Authorization: `Bearer ${hubspotAccessToken}`,
+                  "Content-Type": "application/json",
+              },
+          }
+      );
+
+      console.log("✅ Custom Property `package_units` Created:", response.data);
+      return response.data;
+  } catch (error: any) {
+      console.error(
+          "❌ Error creating HubSpot product property:",
+          error.response?.data || error.message
+      );
+  }
+};
+
+
+
+const createHubSpotProductPropertyTiersJson = async (hubspotAccessToken: string) => {
+  try {
+      const response = await axios.post(
+          `https://api.hubapi.com/crm/v3/properties/products`,
+          {
+              name: "tiers_json",
+              label: "Tiered Pricing",
+              type: "string",
+              fieldType: "textarea",
+              groupName: "productinformation",
+              description: "JSON format of tiered pricing (e.g., price per tier)",
+              displayOrder: -1,
+              hasUniqueValue: false,
+              hidden: false,
+              formField: true,
+          },
+          {
+              headers: {
+                  Authorization: `Bearer ${hubspotAccessToken}`,
+                  "Content-Type": "application/json",
+              },
+          }
+      );
+
+      console.log("✅ Custom Property `tiers_json` Created:", response.data);
+      return response.data;
+  } catch (error: any) {
+      console.error(
+          "❌ Error creating HubSpot product property:",
+          error.response?.data || error.message
+      );
+  }
+};
+
+const createHubSpotProductPropertyTierMode = async (hubspotAccessToken: string) => {
+  try {
+      const response = await axios.post(
+          `https://api.hubapi.com/crm/v3/properties/products`,
+          {
+              name: "tier_mode",
+              label: "Tier Pricing Mode",
+              type: "enumeration",
+              fieldType: "select",
+              groupName: "productinformation",
+              options: [
+                  { label: "Graduated", value: "graduated" },
+                  { label: "Volume", value: "volume" }
+              ],
+              description: "Defines whether pricing is graduated or volume-based",
+              displayOrder: -1,
+              hasUniqueValue: false,
+              hidden: false,
+              formField: true,
+          },
+          {
+              headers: {
+                  Authorization: `Bearer ${hubspotAccessToken}`,
+                  "Content-Type": "application/json",
+              },
+          }
+      );
+
+      console.log("✅ Custom Property `tier_mode` Created:", response.data);
+      return response.data;
+  } catch (error: any) {
+      console.error(
+          "❌ Error creating HubSpot product property:",
+          error.response?.data || error.message
+      );
+  }
+};
+
+
+
+const createusuagebasedHubSpotProperties = async (hubspotAccessToken: string) => {
+  await createHubSpotProductPropertyBillingType(hubspotAccessToken);
+  await createHubSpotProductPropertyUsageModel(hubspotAccessToken);
+  await createHubSpotProductPropertyUnitPrice(hubspotAccessToken);
+  await createHubSpotProductPropertyPackagePrice(hubspotAccessToken);
+  await createHubSpotProductPropertyPackageUnits(hubspotAccessToken);
+  await createHubSpotProductPropertyTierMode(hubspotAccessToken);
+  await createHubSpotProductPropertyTiersJson(hubspotAccessToken);
+};
+
+
+
+
+
 export {
   updateHubSpotContact,
   fetchHubSpotContact,
@@ -1739,5 +2457,7 @@ export {
   fetchdealStripedetailById,
   updateHubSpotCompanyFromStripe,
   updateHubSpotContactFromStripe,
-  updateHubSpotProductFromStripe
+  updateHubSpotProductFromStripe,
+  appendInvoiceToHubSpotHistory,
+  createusuagebasedHubSpotProperties
 };

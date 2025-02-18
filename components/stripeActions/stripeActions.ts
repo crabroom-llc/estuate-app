@@ -237,19 +237,19 @@ const createProduct = async (stripeAccessToken, productData) => {
       name = null,
       price = null,
       sku = null,
-      description = null,
-      billing_frequency = null, // Monthly, Yearly, One-time
+      description,
+      recurringbillingfrequency = null, // Monthly, Yearly, One-time
       createdate = null,
       hs_lastmodifieddate = null,
     } = properties || {};
-
-    // Convert price to cents (Stripe expects amounts in cents)
+    const billing_frequency = recurringbillingfrequency;
+    // Convert  price to cents (Stripe expects amounts in cents)
     const priceInCents = Math.round(parseFloat(price) * 100);
 
     // Determine billing frequency for Stripe pricing
     let stripeRecurring: Stripe.PriceCreateParams.Recurring | undefined;
 
-    if (billing_frequency) {
+    if (billing_frequency && billing_frequency.toLowerCase() != "one_time") {
       switch (billing_frequency.toLowerCase()) {
         case "weekly":
           stripeRecurring = { interval: "week", interval_count: 1 };
@@ -824,8 +824,8 @@ const processStripePayments = async (dealData, stripeAccessToken) => {
     // ✅ Explicitly define responseData with correct types
     const responseData: {
       dealId: string;
-      invoices: string[];
-      subscriptions: string[];
+      invoices: { id: string; created_at: string }[];
+      subscriptions: { id: string; created_at: string }[];
       amount: number;
     } = {
       dealId: dealId,
@@ -851,7 +851,10 @@ const processStripePayments = async (dealData, stripeAccessToken) => {
           console.log(
             `📩 Manual invoice created for Customer ${customerId}: ${manualInvoice.id}`
           );
-          responseData.invoices.push(manualInvoice.id); // ✅ Collect Manual Invoice ID
+          responseData.invoices.push({
+            id: manualInvoice.id,
+            created_at: new Date(manualInvoice.created * 1000).toISOString(), 
+          }); // ✅ Collect Manual Invoice ID
           return responseData;
         } else {
           console.error(
@@ -883,7 +886,10 @@ const processStripePayments = async (dealData, stripeAccessToken) => {
           console.log(
             `📩 Invoice created for Customer ${customerId}: ${invoice.id}`
           );
-          responseData.invoices.push(invoice.id); // ✅ Collect Invoice ID
+          responseData.invoices.push({
+            id: invoice.id,
+            created_at: new Date(invoice.created * 1000).toISOString(), 
+          });
         } else {
           console.error(
             `❌ Failed to create invoice for Customer ${customerId}`
@@ -916,7 +922,10 @@ const processStripePayments = async (dealData, stripeAccessToken) => {
             console.log(
               `🔄 Subscription created for Customer ${customerId}: ${subscription.id}`
             );
-            responseData.subscriptions.push(subscription.id); // ✅ Collect Subscription ID
+            responseData.subscriptions.push({
+              id: subscription.id,
+              created_at: new Date(subscription.created * 1000).toISOString(),
+            });
           } else {
             console.error(
               `❌ Failed to create subscription for Customer ${customerId}`
@@ -932,8 +941,9 @@ const processStripePayments = async (dealData, stripeAccessToken) => {
             stripeAccessToken,
             dealId
           )) as
-            | { subscriptionId: string; invoiceId: string | null }
-            | { subscriptionId: string; invoiceId: string | null }[];
+            | { subscriptionId: string; subscriptionCreated: number; invoiceId: string | null; invoiceCreated: number | null }
+            | { subscriptionId: string; subscriptionCreated: number; invoiceId: string | null; invoiceCreated: number | null }[];
+          
 
           if (subscriptionWithInvoice) {
             console.log(
@@ -946,24 +956,47 @@ const processStripePayments = async (dealData, stripeAccessToken) => {
             if (!responseData.invoices) {
               responseData.invoices = [];
             }
-
-            // ✅ If the response is an array, loop through and collect IDs
+            
             if (Array.isArray(subscriptionWithInvoice)) {
               subscriptionWithInvoice.forEach((sub) => {
-                responseData.subscriptions.push(sub.subscriptionId);
-                if (sub.invoiceId) {
-                  responseData.invoices.push(sub.invoiceId);
+                responseData.subscriptions.push({
+                  id: sub.subscriptionId,
+                  created_at: new Date(sub.subscriptionCreated * 1000).toISOString(), // ✅ Use correct subscription timestamp
+                });
+            
+                if (sub.invoiceId && sub.invoiceCreated !== null) {  // ✅ Ensure invoiceCreated is not null
+                  responseData.invoices.push({
+                    id: sub.invoiceId,
+                    created_at: new Date(sub.invoiceCreated * 1000).toISOString(), // ✅ Safe conversion
+                  });
+                } else if (sub.invoiceId) {
+                  responseData.invoices.push({
+                    id: sub.invoiceId,
+                    created_at: "" // ✅ Handle the case where invoiceCreated is null
+                  });
                 }
               });
             } else {
-              // ✅ If it's a single subscription, push the IDs
-              responseData.subscriptions.push(
-                subscriptionWithInvoice.subscriptionId
-              );
-              if (subscriptionWithInvoice.invoiceId) {
-                responseData.invoices.push(subscriptionWithInvoice.invoiceId);
+              responseData.subscriptions.push({
+                id: subscriptionWithInvoice.subscriptionId,
+                created_at: new Date(subscriptionWithInvoice.subscriptionCreated * 1000).toISOString(), // ✅ Use correct subscription timestamp
+              });
+            
+              if (subscriptionWithInvoice.invoiceId && subscriptionWithInvoice.invoiceCreated !== null) {  
+                responseData.invoices.push({
+                  id: subscriptionWithInvoice.invoiceId,
+                  created_at: new Date(subscriptionWithInvoice.invoiceCreated * 1000).toISOString(), // ✅ Safe conversion
+                });
+              } else if (subscriptionWithInvoice.invoiceId) {
+                responseData.invoices.push({
+                  id: subscriptionWithInvoice.invoiceId,
+                  created_at: "", // ✅ Handle null timestamp gracefully
+                });
               }
+              
             }
+                   
+            
           } else {
             console.error(
               `❌ Failed to create subscription with invoice for Customer ${customerId}`
@@ -987,7 +1020,10 @@ const processStripePayments = async (dealData, stripeAccessToken) => {
           console.log(
             `📩 Manual invoice created for Customer ${customerId}: ${manualInvoice.id}`
           );
-          responseData.invoices.push(manualInvoice.id); // ✅ Collect Manual Invoice ID
+          responseData.invoices.push({
+            id: manualInvoice.id,
+            created_at: new Date().toISOString(), // ✅ Store UTC time
+          });
         } else {
           console.error(
             `❌ Failed to create manual invoice for Customer ${customerId}`
@@ -1003,6 +1039,197 @@ const processStripePayments = async (dealData, stripeAccessToken) => {
     return null;
   }
 };
+// const processStripePayments = async (dealData, stripeAccessToken) => {
+//   try {
+//     console.log(
+//       "🔹 Processing Stripe Payments:",
+//       JSON.stringify(dealData, null, 2)
+//     );
+
+//     const { dealId, customer, products, amount } = dealData;
+
+//     // ✅ Explicitly define responseData with correct types
+//     const responseData: {
+//       dealId: string;
+//       invoices: string[];
+//       subscriptions: string[];
+//       amount: number;
+//     } = {
+//       dealId: dealId,
+//       invoices: [],
+//       subscriptions: [],
+//       amount: amount,
+//     };
+
+//     for (const customerId of customer) {
+//       console.log(`✅ Processing for Customer: ${customerId}`);
+
+//       if (!products) {
+//         console.log(
+//           `📩 No Stripe products found for ${customerId}. Creating a manual invoice for ${amount}...`
+//         );
+//         const manualInvoice = await createManualInvoice(
+//           customerId,
+//           amount,
+//           stripeAccessToken,
+//           dealId
+//         );
+//         if (manualInvoice) {
+//           console.log(
+//             `📩 Manual invoice created for Customer ${customerId}: ${manualInvoice.id}`
+//           );
+//           responseData.invoices.push(manualInvoice.id); // ✅ Collect Manual Invoice ID
+//           return responseData;
+//         } else {
+//           console.error(
+//             `❌ Failed to create manual invoice for Customer ${customerId}`
+//           );
+//         }
+//       }
+
+//       // ✅ Separate one-time and recurring products
+//       const oneTimeProducts = products.filter(
+//         (product) => product.type === "one_time"
+//       );
+//       const recurringProducts = products.filter(
+//         (product) => product.type === "recurring"
+//       );
+
+//       // ✅ Process One-Time Products (Invoice)
+//       if (oneTimeProducts.length > 0) {
+//         console.log(
+//           `💰 Customer ${customerId} has one-time products. Creating invoice...`
+//         );
+//         const invoice = await createStripeInvoice(
+//           customerId,
+//           oneTimeProducts,
+//           stripeAccessToken,
+//           dealId
+//         );
+//         if (invoice) {
+//           console.log(
+//             `📩 Invoice created for Customer ${customerId}: ${invoice.id}`
+//           );
+//           responseData.invoices.push(invoice.id); // ✅ Collect Invoice ID
+//         } else {
+//           console.error(
+//             `❌ Failed to create invoice for Customer ${customerId}`
+//           );
+//         }
+//       }
+
+//       // ✅ Process Recurring Products (Subscription)
+//       if (recurringProducts.length > 0) {
+//         console.log(
+//           `🔄 Customer ${customerId} has recurring products. Checking payment method...`
+//         );
+
+//         const hasPayment = await hasPaymentMethod(
+//           customerId,
+//           stripeAccessToken
+//         );
+//         if (hasPayment) {
+//           // ✅ Customer has a payment method → Create subscription
+//           console.log(
+//             `✅ Customer ${customerId} has a payment method. Creating subscription...`
+//           );
+//           const subscription = await createStripeSubscription(
+//             customerId,
+//             recurringProducts,
+//             stripeAccessToken,
+//             dealId
+//           );
+//           if (subscription) {
+//             console.log(
+//               `🔄 Subscription created for Customer ${customerId}: ${subscription.id}`
+//             );
+//             responseData.subscriptions.push(subscription.id); // ✅ Collect Subscription ID
+//           } else {
+//             console.error(
+//               `❌ Failed to create subscription for Customer ${customerId}`
+//             );
+//           }
+//         } else {
+//           console.log(
+//             `📩 No payment method found for ${customerId}. Creating subscription with invoice.`
+//           );
+//           const subscriptionWithInvoice = (await createSubscriptionWithInvoice(
+//             customerId,
+//             recurringProducts,
+//             stripeAccessToken,
+//             dealId
+//           )) as
+//             | { subscriptionId: string; invoiceId: string | null }
+//             | { subscriptionId: string; invoiceId: string | null }[];
+
+//           if (subscriptionWithInvoice) {
+//             console.log(
+//               `📩 Subscription with invoice created for Customer ${customerId}`
+//             );
+
+//             if (!responseData.subscriptions) {
+//               responseData.subscriptions = [];
+//             }
+//             if (!responseData.invoices) {
+//               responseData.invoices = [];
+//             }
+
+//             // ✅ If the response is an array, loop through and collect IDs
+//             if (Array.isArray(subscriptionWithInvoice)) {
+//               subscriptionWithInvoice.forEach((sub) => {
+//                 responseData.subscriptions.push(sub.subscriptionId);
+//                 if (sub.invoiceId) {
+//                   responseData.invoices.push(sub.invoiceId);
+//                 }
+//               });
+//             } else {
+//               // ✅ If it's a single subscription, push the IDs
+//               responseData.subscriptions.push(
+//                 subscriptionWithInvoice.subscriptionId
+//               );
+//               if (subscriptionWithInvoice.invoiceId) {
+//                 responseData.invoices.push(subscriptionWithInvoice.invoiceId);
+//               }
+//             }
+//           } else {
+//             console.error(
+//               `❌ Failed to create subscription with invoice for Customer ${customerId}`
+//             );
+//           }
+//         }
+//       }
+
+//       // ✅ Handle Case Where No Stripe Products Exist
+//       if (products.length == 0) {
+//         console.log(
+//           `📩 No Stripe products found for ${customerId}. Creating a manual invoice for ${amount}...`
+//         );
+//         const manualInvoice = await createManualInvoice(
+//           customerId,
+//           amount,
+//           stripeAccessToken,
+//           dealId
+//         );
+//         if (manualInvoice) {
+//           console.log(
+//             `📩 Manual invoice created for Customer ${customerId}: ${manualInvoice.id}`
+//           );
+//           responseData.invoices.push(manualInvoice.id); // ✅ Collect Manual Invoice ID
+//         } else {
+//           console.error(
+//             `❌ Failed to create manual invoice for Customer ${customerId}`
+//           );
+//         }
+//       }
+//     }
+
+//     // ✅ Return all collected invoice and subscription IDs
+//     return responseData;
+//   } catch (error) {
+//     console.error("❌ Error processing Stripe payments:", error);
+//     return null;
+//   }
+// };
 
 
 // const createManualInvoice = async (
@@ -1090,7 +1317,9 @@ const createManualInvoice = async (
       description: "Invoice for Deal",
       metadata: { deal_id: dealId },
     });
-
+    await stripe.invoices.update(invoice.id, {
+      metadata: { deal_id: dealId, customer: customerId },
+    });
     console.log(`📄 Invoice item created: ${invoiceItem.id} and linked to invoice: ${invoice.id}`);
 
     console.log("Fetching invoice before finalizing...");
@@ -1123,28 +1352,92 @@ const createManualInvoice = async (
 };
 
 const hasPaymentMethod = async (customerId, stripeAccessToken) => {
-  try {
-    const stripe = stripeInstance(stripeAccessToken);
-    const customer = await stripe.customers.retrieve(customerId);
+  return false;
+  // try {
+  //   const stripe = stripeInstance(stripeAccessToken);
+  //   const customer = await stripe.customers.retrieve(customerId);
 
-    if (
-      "invoice_settings" in customer &&
-      customer.invoice_settings?.default_payment_method
-    ) {
-      console.log(`✅ Customer ${customerId} has a default payment method.`);
-      return true;
-    }
+  //   if (
+  //     "invoice_settings" in customer &&
+  //     customer.invoice_settings?.default_payment_method
+  //   ) {
+  //     console.log(`✅ Customer ${customerId} has a default payment method.`);
+  //     return true;
+  //   }
 
-    console.log(`⚠️ Customer ${customerId} has NO default payment method.`);
-    return false;
-  } catch (error) {
-    console.error(
-      `❌ Error checking payment method for customer ${customerId}:`,
-      error
-    );
-    return false;
-  }
+  //   console.log(`⚠️ Customer ${customerId} has NO default payment method.`);
+  //   return false;
+  // } catch (error) {
+  //   console.error(
+  //     `❌ Error checking payment method for customer ${customerId}:`,
+  //     error
+  //   );
+  //   return false;
+  // }
 };
+
+// const createStripeInvoice = async (
+//   customerId,
+//   products,
+//   stripeAccessToken,
+//   dealId
+// ) => {
+//   console.log("inside createStripeInvoice");
+//   try {
+//     const stripe = stripeInstance(stripeAccessToken);
+//     const invoiceItems = [] as any[];
+
+//     for (const product of products) {
+//       if (product.type === "one_time" || product.type === "recurring") {
+//         console.log(product.stripePriceId + "price id");
+//         const invoiceItem = await stripe.invoiceItems.create({
+//           customer: customerId,
+//           price: product.stripePriceId,
+//           quantity: product.quantity,
+//           metadata: {
+//             // ✅ Add metadata to individual invoice items
+//             deal_id: dealId,
+//             product_id: product.stripeProductId,
+//           },
+//         });
+//         invoiceItems.push(invoiceItem);
+//       }
+//       else{
+//         console.log("product type not found");
+//       }
+//     }
+
+//     // ✅ Step 1: Create Invoice
+//     let invoice = await stripe.invoices.create({
+//       customer: customerId,
+//       collection_method: "send_invoice",
+//       days_until_due: 7, // Send invoice instead of charging automatically
+//       auto_advance: true, // Let Stripe send the invoice
+//     });
+
+//     console.log(`📩 Invoice created for Customer ${customerId}: ${invoice.id}`);
+
+//     // ✅ Step 2: Add Metadata to Invoice Before Finalizing
+//     invoice = await stripe.invoices.update(invoice.id, {
+//       metadata: {
+//         deal_id: dealId, // ✅ Same metadata as invoice items
+//         customer_id: customerId,
+//       },
+//     });
+
+//     console.log(`📝 Metadata added to Invoice ${invoice.id}`);
+
+//     // ✅ Step 3: Finalize the Invoice
+//     const finalizedInvoice = await stripe.invoices.finalizeInvoice(invoice.id);
+//     console.log(`📨 Invoice finalized and sent immediately: ${finalizedInvoice.id}`);
+
+//     return finalizedInvoice; // ✅ Return the finalized invoice
+//   } catch (error) {
+//     console.error(`❌ Error creating invoice for customer ${customerId}:`, error);
+//     return null;
+//   }
+// };
+
 
 const createStripeInvoice = async (
   customerId,
@@ -1152,49 +1445,68 @@ const createStripeInvoice = async (
   stripeAccessToken,
   dealId
 ) => {
-  console.log("inside create striep Invoice");
+  console.log("inside createStripeInvoice");
   try {
     const stripe = stripeInstance(stripeAccessToken);
-    const invoiceItems = [] as any[];
 
-    for (const product of products) {
-      if (product.type === "one_time" || product.type === "recurring") {
-        const invoiceItem = await stripe.invoiceItems.create({
-          customer: customerId,
-          price: product.stripePriceId,
-          quantity: product.quantity,
-          metadata: {
-            // ✅ Add metadata to individual invoice items
-            deal_id: dealId,
-            product_id: product.stripeProductId,
-          },
-        });
-        invoiceItems.push(invoiceItem);
-      }
-    }
-
-    const invoice = await stripe.invoices.create({
+    // ✅ Step 1: Create the Invoice FIRST
+    let invoice = await stripe.invoices.create({
       customer: customerId,
       collection_method: "send_invoice",
       days_until_due: 7, // Send invoice instead of charging automatically
-      auto_advance: true, // Let Stripe send the invoice
+      auto_advance: false, // ✅ Prevent auto-finalization before items attach
     });
 
     console.log(`📩 Invoice created for Customer ${customerId}: ${invoice.id}`);
 
+    const invoiceItems = [] as any[];
+
+    // ✅ Step 2: Now Create Invoice Items and Attach to the Invoice
+    for (const product of products) {
+      if (product.type === "one_time" || product.type === "recurring") {
+        console.log(`🛒 Adding Product to Invoice - Price ID: ${product.stripePriceId}, Quantity: ${product.quantity}`);
+
+        const invoiceItem = await stripe.invoiceItems.create({
+          customer: customerId,
+          price: product.stripePriceId,
+          quantity: product.quantity,
+          invoice: invoice.id, // ✅ Assign to the created invoice
+          metadata: {
+            deal_id: dealId,
+            product_id: product.stripeProductId,
+          },
+        });
+
+        console.log(`✅ Invoice Item Created: ${invoiceItem.id} | Amount: ${invoiceItem.amount} | Invoice ID: ${invoiceItem.invoice}`);
+        invoiceItems.push(invoiceItem);
+      } else {
+        console.log("⚠️ Product type not found");
+      }
+    }
+
+    // ✅ Step 3: Add Metadata to Invoice Before Finalizing
+    invoice = await stripe.invoices.update(invoice.id, {
+      metadata: {
+        deal_id: dealId, // ✅ Same metadata as invoice items
+        customer_id: customerId,
+      },
+    });
+
+    console.log(`📝 Metadata added to Invoice ${invoice.id}`);
+
+    // ✅ Step 4: Finalize the Invoice AFTER Attaching Items
     const finalizedInvoice = await stripe.invoices.finalizeInvoice(invoice.id);
-    console.log(
-      `📨 Invoice finalized and sent immediately: ${finalizedInvoice.id}`
-    );
-    return invoice;
+    console.log(`📨 Invoice Finalized with Total: ${finalizedInvoice.total} | Status: ${finalizedInvoice.status}`);
+
+    return finalizedInvoice; // ✅ Return the finalized invoice
   } catch (error) {
-    console.error(
-      `❌ Error creating invoice for customer ${customerId}:`,
-      error
-    );
+    console.error(`❌ Error creating invoice for customer ${customerId}:`, error);
     return null;
   }
 };
+
+
+
 
 const createStripeSubscription = async (
   customerId,
@@ -1385,7 +1697,6 @@ const createSubscriptionWithInvoice = async (
     console.log("inside createSubscriptionWithInvoice");
     const stripe = stripeInstance(stripeAccessToken);
 
-    // ✅ Step 1: Group products by `interval` and `interval_count`
     const groupedProducts: Record<
       string,
       Stripe.SubscriptionCreateParams.Item[]
@@ -1398,7 +1709,6 @@ const createSubscriptionWithInvoice = async (
           groups[key] = [];
         }
 
-        // ✅ Use the correct quantity from the product
         groups[key].push({
           price: product.stripePriceId,
           quantity: product.quantity || 1,
@@ -1406,10 +1716,11 @@ const createSubscriptionWithInvoice = async (
         return groups;
       }, {} as Record<string, Stripe.SubscriptionCreateParams.Item[]>);
 
-    // ✅ Step 2: Create separate subscriptions for each billing interval group
     const createdSubscriptions: {
       subscriptionId: string;
+      subscriptionCreated: number; // ✅ Store subscription created timestamp
       invoiceId: string | null;
+      invoiceCreated: number | null; // ✅ Store invoice created timestamp
     }[] = [];
 
     for (const [interval, subscriptionItems] of Object.entries(
@@ -1434,8 +1745,13 @@ const createSubscriptionWithInvoice = async (
         `📩 Subscription with invoice created for customer ${customerId}: ${subscription.id}`
       );
 
-      // ✅ Extract Invoice ID
+      // ✅ Extract Subscription Created Timestamp
+      const subscriptionCreated = subscription.created;
+
+      // ✅ Extract Invoice ID and Created Timestamp
       let invoiceId: string | null = null;
+      let invoiceCreated: number | null = null;
+
       if (typeof subscription.latest_invoice === "string") {
         invoiceId = subscription.latest_invoice;
       } else if (
@@ -1443,6 +1759,7 @@ const createSubscriptionWithInvoice = async (
         "id" in subscription.latest_invoice
       ) {
         invoiceId = subscription.latest_invoice.id;
+        invoiceCreated = subscription.latest_invoice.created; // ✅ Get invoice created timestamp
       }
 
       // ✅ Add Metadata to Invoice and Finalize
@@ -1453,7 +1770,7 @@ const createSubscriptionWithInvoice = async (
           metadata: {
             deal_id: dealId,
             subscription_id: subscription.id,
-            created_by: "HubSpot Integration",
+           
           },
         });
 
@@ -1461,17 +1778,26 @@ const createSubscriptionWithInvoice = async (
         const finalizedInvoice = await stripe.invoices.finalizeInvoice(
           invoiceId
         );
+
         console.log(
           `📨 Invoice finalized and sent immediately: ${finalizedInvoice.id}`
         );
+
+        // ✅ Ensure we get the correct created timestamp
+        invoiceCreated = finalizedInvoice.created;
       } else {
         console.warn(
           `⚠️ No invoice found for subscription: ${subscription.id}`
         );
       }
 
-      // ✅ Collect Subscription and Invoice IDs
-      createdSubscriptions.push({ subscriptionId: subscription.id, invoiceId });
+      // ✅ Collect Subscription and Invoice Data
+      createdSubscriptions.push({
+        subscriptionId: subscription.id,
+        subscriptionCreated, // ✅ Store Subscription Created Timestamp
+        invoiceId,
+        invoiceCreated, // ✅ Store Invoice Created Timestamp
+      });
     }
 
     return createdSubscriptions;
@@ -1483,6 +1809,118 @@ const createSubscriptionWithInvoice = async (
     return null;
   }
 };
+
+
+
+
+// const createSubscriptionWithInvoice = async (
+//   customerId,
+//   products,
+//   stripeAccessToken,
+//   dealId
+// ) => {
+//   try {
+//     console.log("inside createSubscriptionWithInvoice");
+//     const stripe = stripeInstance(stripeAccessToken);
+
+//     // ✅ Step 1: Group products by `interval` and `interval_count`
+//     const groupedProducts: Record<
+//       string,
+//       Stripe.SubscriptionCreateParams.Item[]
+//     > = products
+//       .filter((product) => product.type === "recurring")
+//       .reduce((groups, product) => {
+//         const key = `${product.interval}-${product.interval_count}`;
+
+//         if (!groups[key]) {
+//           groups[key] = [];
+//         }
+
+//         // ✅ Use the correct quantity from the product
+//         groups[key].push({
+//           price: product.stripePriceId,
+//           quantity: product.quantity || 1,
+//         });
+//         return groups;
+//       }, {} as Record<string, Stripe.SubscriptionCreateParams.Item[]>);
+
+//     // ✅ Step 2: Create separate subscriptions for each billing interval group
+//     const createdSubscriptions: {
+//       subscriptionId: string;
+//       invoiceId: string | null;
+//     }[] = [];
+
+//     for (const [interval, subscriptionItems] of Object.entries(
+//       groupedProducts
+//     )) {
+//       console.log(`🔄 Creating subscription for billing interval: ${interval}`);
+
+//       const subscription = await stripe.subscriptions.create({
+//         customer: customerId,
+//         items: subscriptionItems,
+//         collection_method: "send_invoice",
+//         days_until_due: 7,
+//         expand: ["latest_invoice.payment_intent"],
+//         metadata: {
+//           deal_id: dealId,
+//           billing_interval: interval,
+//           created_by: "HubSpot Integration",
+//         },
+//       });
+
+//       console.log(
+//         `📩 Subscription with invoice created for customer ${customerId}: ${subscription.id}`
+//       );
+
+//       // ✅ Extract Invoice ID
+//       let invoiceId: string | null = null;
+//       if (typeof subscription.latest_invoice === "string") {
+//         invoiceId = subscription.latest_invoice;
+//       } else if (
+//         subscription.latest_invoice &&
+//         "id" in subscription.latest_invoice
+//       ) {
+//         invoiceId = subscription.latest_invoice.id;
+//       }
+
+//       // ✅ Add Metadata to Invoice and Finalize
+//       if (invoiceId) {
+//         console.log(`📩 Updating invoice ${invoiceId} with metadata...`);
+
+//         await stripe.invoices.update(invoiceId, {
+//           metadata: {
+//             deal_id: dealId,
+//             subscription_id: subscription.id,
+//             created_by: "HubSpot Integration",
+//           },
+//         });
+
+//         // ✅ Finalize the invoice
+//         const finalizedInvoice = await stripe.invoices.finalizeInvoice(
+//           invoiceId
+//         );
+//         console.log(
+//           `📨 Invoice finalized and sent immediately: ${finalizedInvoice.id}`
+//         );
+//       } else {
+//         console.warn(
+//           `⚠️ No invoice found for subscription: ${subscription.id}`
+//         );
+//       }
+
+//       // ✅ Collect Subscription and Invoice IDs
+//       createdSubscriptions.push({ subscriptionId: subscription.id, invoiceId });
+//     }
+
+//     return createdSubscriptions;
+//   } catch (error) {
+//     console.error(
+//       `❌ Error creating subscription with invoice for customer ${customerId}:`,
+//       error
+//     );
+//     return null;
+//   }
+// };
 
 //newcode
 const deleteStripeCustomer = async (stripeAccessToken, customerId) => {
@@ -1798,7 +2236,10 @@ const checkPaymentMethod = async (
       const invoice = await stripe.invoices.retrieve(invoice_id);
       const payment_intent_id = invoice.payment_intent as string;
       console.log("Payment Intent ID:", payment_intent_id);
-
+      if(!payment_intent_id){
+        console.log("Payment Intent ID not found to sav the payment method");
+        return;
+      }
       // Retrieve the PaymentIntent to get the Payment Method ID
       const paymentIntent = await stripe.paymentIntents.retrieve(
         payment_intent_id
