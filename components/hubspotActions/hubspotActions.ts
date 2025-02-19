@@ -225,7 +225,7 @@ const fetchProductById = async (
   hubspotAccessToken: string
 ) => {
   try {
-    const url = `https://api.hubapi.com/crm/v3/objects/products/${productId}?properties=stripe_product_id`;
+    const url = `https://api.hubapi.com/crm/v3/objects/products/${productId}`;
     const response = await axios.get(url, {
       headers: {
         Authorization: `Bearer ${hubspotAccessToken}`,
@@ -233,11 +233,11 @@ const fetchProductById = async (
       },
       params: {
         properties:
-          "name,price,sku,description,billing_frequency,createdate,hs_lastmodifieddate",
+          "name,price,sku,description,billing_frequency,createdate,hs_lastmodifieddate,billing_type,usage_model,unit_price,package_price,package_units,tier_mode,tiers_json,currency,stripe_product_id",
       },
     });
 
-    console.log("✅ HubSpot Product Details:", response.data);
+    console.log("✅ HubSpot Product Details With Id:", response.data);
     return response.data;
   } catch (error: any) {
     console.error(
@@ -494,6 +494,7 @@ const updateHubSpotProduct = async (
   productId: string,
   stripeProductId: string,
   stripePriceId: string,
+  stripeMeterId: string,
   hubspotAccessToken: string
 ) => {
   try {
@@ -518,6 +519,7 @@ const updateHubSpotProduct = async (
         properties: {
           stripe_product_id: stripeProductId,
           stripe_price_id: stripePriceId,
+          stripe_meter_id: stripeMeterId,
         },
       },
       {
@@ -1358,41 +1360,41 @@ async function ensureInvoiceHistoryPropertyExists(hubspotAccessToken) {
   const propertiesUrl = "https://api.hubapi.com/crm/v3/properties/deal";
 
   try {
-      // Fetch all properties in HubSpot Deals
-      const response = await axios.get(propertiesUrl, {
-          headers: {
-              Authorization: `Bearer ${hubspotAccessToken}`,
-              "Content-Type": "application/json",
-          },
+    // Fetch all properties in HubSpot Deals
+    const response = await axios.get(propertiesUrl, {
+      headers: {
+        Authorization: `Bearer ${hubspotAccessToken}`,
+        "Content-Type": "application/json",
+      },
+    });
+
+    const existingProperties = response.data.results.map(prop => prop.name);
+
+    if (!existingProperties.includes("stripe_invoice_history")) {
+      console.log("🔹 Creating 'stripe_invoice_history' property in HubSpot...");
+
+      const propertyData = {
+        name: "stripe_invoice_history",
+        label: "Stripe Invoice History",
+        type: "string",
+        fieldType: "textarea",
+        groupName: "dealinformation",
+        description: "Stores the history of all Stripe invoices related to this deal",
+      };
+
+      await axios.post(propertiesUrl, propertyData, {
+        headers: {
+          Authorization: `Bearer ${hubspotAccessToken}`,
+          "Content-Type": "application/json",
+        },
       });
 
-      const existingProperties = response.data.results.map(prop => prop.name);
-
-      if (!existingProperties.includes("stripe_invoice_history")) {
-          console.log("🔹 Creating 'stripe_invoice_history' property in HubSpot...");
-
-          const propertyData = {
-              name: "stripe_invoice_history",
-              label: "Stripe Invoice History",
-              type: "string",
-              fieldType: "textarea",
-              groupName: "dealinformation",
-              description: "Stores the history of all Stripe invoices related to this deal",
-          };
-
-          await axios.post(propertiesUrl, propertyData, {
-              headers: {
-                  Authorization: `Bearer ${hubspotAccessToken}`,
-                  "Content-Type": "application/json",
-              },
-          });
-
-          console.log("✅ 'stripe_invoice_history' property created in HubSpot.");
-      } else {
-          console.log("ℹ️ 'stripe_invoice_history' property already exists in HubSpot.");
-      }
-  } catch (error:any) {
-      console.error("❌ Error checking/creating property in HubSpot:", error.response?.data || error.message);
+      console.log("✅ 'stripe_invoice_history' property created in HubSpot.");
+    } else {
+      console.log("ℹ️ 'stripe_invoice_history' property already exists in HubSpot.");
+    }
+  } catch (error: any) {
+    console.error("❌ Error checking/creating property in HubSpot:", error.response?.data || error.message);
   }
 }
 
@@ -1412,7 +1414,7 @@ async function ensureInvoiceHistoryPropertyExists(hubspotAccessToken) {
 //   await createInvoiceAndSubscriptionIdsOnHubspot(hubspotAccessToken);
 
 //   await ensureInvoiceHistoryPropertyExists(hubspotAccessToken);
-  
+
 
 //   try {
 //     const updateData = { properties: {} };
@@ -1576,7 +1578,7 @@ async function ensureInvoiceHistoryPropertyExists(hubspotAccessToken) {
 //     // ✅ Merge New Invoices with Existing History (Avoid Duplicates)
 //     invoiceIds.forEach((inv) => {
 //       const existingIndex = existingInvoiceHistory.findIndex((record) => record.includes(inv.id));
-      
+
 //       if (existingIndex !== -1) {
 //         // ✅ If invoice exists, update status to 'paid'
 //         existingInvoiceHistory[existingIndex] = `${inv.created_at} ${inv.id} paid`;
@@ -1665,7 +1667,7 @@ const updateHubSpotDeal = async (
     // ✅ Merge New Invoices with Existing History (Avoid Duplicates)
     invoiceIds.forEach((inv) => {
       const existingIndex = existingInvoiceHistory.findIndex((record) => record.includes(inv.id));
-      
+
       if (existingIndex !== -1) {
         // ✅ If invoice exists, update status to 'paid' and append payment_date if available
         existingInvoiceHistory[existingIndex] = inv.payment_date
@@ -2165,35 +2167,35 @@ const updateHubSpotProductFromStripe = async (
 
 const createHubSpotProductPropertyPackagePrice = async (hubspotAccessToken: string) => {
   try {
-      const response = await axios.post(
-          `https://api.hubapi.com/crm/v3/properties/products`,
-          {
-              name: "package_price",
-              label: "Package Price",
-              type: "number",
-              fieldType: "number",
-              groupName: "productinformation",
-              description: "Total price of a prepaid package",
-              displayOrder: -1,
-              hasUniqueValue: false,
-              hidden: false,
-              formField: true,
-          },
-          {
-              headers: {
-                  Authorization: `Bearer ${hubspotAccessToken}`,
-                  "Content-Type": "application/json",
-              },
-          }
-      );
+    const response = await axios.post(
+      `https://api.hubapi.com/crm/v3/properties/products`,
+      {
+        name: "package_price",
+        label: "Package Price",
+        type: "number",
+        fieldType: "number",
+        groupName: "productinformation",
+        description: "Total price of a prepaid package",
+        displayOrder: -1,
+        hasUniqueValue: false,
+        hidden: false,
+        formField: true,
+      },
+      {
+        headers: {
+          Authorization: `Bearer ${hubspotAccessToken}`,
+          "Content-Type": "application/json",
+        },
+      }
+    );
 
-      console.log("✅ Custom Property `package_price` Created:", response.data);
-      return response.data;
+    console.log("✅ Custom Property `package_price` Created:", response.data);
+    return response.data;
   } catch (error: any) {
-      console.error(
-          "❌ Error creating HubSpot product property:",
-          error.response?.data || error.message
-      );
+    console.error(
+      "❌ Error creating HubSpot product property:",
+      error.response?.data || error.message
+    );
   }
 };
 
@@ -2201,40 +2203,40 @@ const createHubSpotProductPropertyPackagePrice = async (hubspotAccessToken: stri
 
 const createHubSpotProductPropertyBillingType = async (hubspotAccessToken: string) => {
   try {
-      const response = await axios.post(
-          `https://api.hubapi.com/crm/v3/properties/products`,
-          {
-              name: "billing_type",
-              label: "Billing Type",
-              type: "enumeration",
-              fieldType: "select",
-              groupName: "productinformation",
-              options: [
-                  { label: "One-time", value: "one_time" },
-                  { label: "Recurring", value: "recurring" },
-                  { label: "Usage-Based", value: "usagebased" },
-              ],
-              description: "Defines the billing type of the product",
-              displayOrder: -1,
-              hasUniqueValue: false,
-              hidden: false,
-              formField: true,
-          },
-          {
-              headers: {
-                  Authorization: `Bearer ${hubspotAccessToken}`,
-                  "Content-Type": "application/json",
-              },
-          }
-      );
+    const response = await axios.post(
+      `https://api.hubapi.com/crm/v3/properties/products`,
+      {
+        name: "billing_type",
+        label: "Billing Type",
+        type: "enumeration",
+        fieldType: "select",
+        groupName: "productinformation",
+        options: [
+          { label: "One-time", value: "one_time" },
+          { label: "Recurring", value: "recurring" },
+          { label: "Usage-Based", value: "usagebased" },
+        ],
+        description: "Defines the billing type of the product",
+        displayOrder: -1,
+        hasUniqueValue: false,
+        hidden: false,
+        formField: true,
+      },
+      {
+        headers: {
+          Authorization: `Bearer ${hubspotAccessToken}`,
+          "Content-Type": "application/json",
+        },
+      }
+    );
 
-      console.log("✅ Custom Property `billing_type` Created:", response.data);
-      return response.data;
+    console.log("✅ Custom Property `billing_type` Created:", response.data);
+    return response.data;
   } catch (error: any) {
-      console.error(
-          "❌ Error creating HubSpot product property:",
-          error.response?.data || error.message
-      );
+    console.error(
+      "❌ Error creating HubSpot product property:",
+      error.response?.data || error.message
+    );
   }
 };
 
@@ -2242,110 +2244,110 @@ const createHubSpotProductPropertyBillingType = async (hubspotAccessToken: strin
 
 const createHubSpotProductPropertyUsageModel = async (hubspotAccessToken: string) => {
   try {
-      const response = await axios.post(
-          `https://api.hubapi.com/crm/v3/properties/products`,
-          {
-              name: "usage_model",
-              label: "Usage Model",
-              type: "enumeration",
-              fieldType: "select",
-              groupName: "productinformation",
-              options: [
-                  { label: "Per Unit", value: "per_unit" },
-                  { label: "Per Package", value: "per_package" },
-                  { label: "Per Tier", value: "per_tier" },
-              ],
-              description: "Defines how the usage is billed",
-              displayOrder: -1,
-              hasUniqueValue: false,
-              hidden: false,
-              formField: true,
-          },
-          {
-              headers: {
-                  Authorization: `Bearer ${hubspotAccessToken}`,
-                  "Content-Type": "application/json",
-              },
-          }
-      );
+    const response = await axios.post(
+      `https://api.hubapi.com/crm/v3/properties/products`,
+      {
+        name: "usage_model",
+        label: "Usage Model",
+        type: "enumeration",
+        fieldType: "select",
+        groupName: "productinformation",
+        options: [
+          { label: "Per Unit", value: "per_unit" },
+          { label: "Per Package", value: "per_package" },
+          { label: "Per Tier", value: "per_tier" },
+        ],
+        description: "Defines how the usage is billed",
+        displayOrder: -1,
+        hasUniqueValue: false,
+        hidden: false,
+        formField: true,
+      },
+      {
+        headers: {
+          Authorization: `Bearer ${hubspotAccessToken}`,
+          "Content-Type": "application/json",
+        },
+      }
+    );
 
-      console.log("✅ Custom Property `usage_model` Created:", response.data);
-      return response.data;
+    console.log("✅ Custom Property `usage_model` Created:", response.data);
+    return response.data;
   } catch (error: any) {
-      console.error(
-          "❌ Error creating HubSpot product property:",
-          error.response?.data || error.message
-      );
+    console.error(
+      "❌ Error creating HubSpot product property:",
+      error.response?.data || error.message
+    );
   }
 };
 
 
 const createHubSpotProductPropertyUnitPrice = async (hubspotAccessToken: string) => {
   try {
-      const response = await axios.post(
-          `https://api.hubapi.com/crm/v3/properties/products`,
-          {
-              name: "unit_price",
-              label: "Unit Price",
-              type: "number",
-              fieldType: "number",
-              groupName: "productinformation",
-              description: "Cost per unit for usage-based billing",
-              displayOrder: -1,
-              hasUniqueValue: false,
-              hidden: false,
-              formField: true,
-          },
-          {
-              headers: {
-                  Authorization: `Bearer ${hubspotAccessToken}`,
-                  "Content-Type": "application/json",
-              },
-          }
-      );
+    const response = await axios.post(
+      `https://api.hubapi.com/crm/v3/properties/products`,
+      {
+        name: "unit_price",
+        label: "Unit Price",
+        type: "number",
+        fieldType: "number",
+        groupName: "productinformation",
+        description: "Cost per unit for usage-based billing",
+        displayOrder: -1,
+        hasUniqueValue: false,
+        hidden: false,
+        formField: true,
+      },
+      {
+        headers: {
+          Authorization: `Bearer ${hubspotAccessToken}`,
+          "Content-Type": "application/json",
+        },
+      }
+    );
 
-      console.log("✅ Custom Property `unit_price` Created:", response.data);
-      return response.data;
+    console.log("✅ Custom Property `unit_price` Created:", response.data);
+    return response.data;
   } catch (error: any) {
-      console.error(
-          "❌ Error creating HubSpot product property:",
-          error.response?.data || error.message
-      );
+    console.error(
+      "❌ Error creating HubSpot product property:",
+      error.response?.data || error.message
+    );
   }
 };
 
 
 const createHubSpotProductPropertyPackageUnits = async (hubspotAccessToken: string) => {
   try {
-      const response = await axios.post(
-          `https://api.hubapi.com/crm/v3/properties/products`,
-          {
-              name: "package_units",
-              label: "Package Units",
-              type: "number",
-              fieldType: "number",
-              groupName: "productinformation",
-              description: "Number of units in a package",
-              displayOrder: -1,
-              hasUniqueValue: false,
-              hidden: false,
-              formField: true,
-          },
-          {
-              headers: {
-                  Authorization: `Bearer ${hubspotAccessToken}`,
-                  "Content-Type": "application/json",
-              },
-          }
-      );
+    const response = await axios.post(
+      `https://api.hubapi.com/crm/v3/properties/products`,
+      {
+        name: "package_units",
+        label: "Package Units",
+        type: "number",
+        fieldType: "number",
+        groupName: "productinformation",
+        description: "Number of units in a package",
+        displayOrder: -1,
+        hasUniqueValue: false,
+        hidden: false,
+        formField: true,
+      },
+      {
+        headers: {
+          Authorization: `Bearer ${hubspotAccessToken}`,
+          "Content-Type": "application/json",
+        },
+      }
+    );
 
-      console.log("✅ Custom Property `package_units` Created:", response.data);
-      return response.data;
+    console.log("✅ Custom Property `package_units` Created:", response.data);
+    return response.data;
   } catch (error: any) {
-      console.error(
-          "❌ Error creating HubSpot product property:",
-          error.response?.data || error.message
-      );
+    console.error(
+      "❌ Error creating HubSpot product property:",
+      error.response?.data || error.message
+    );
   }
 };
 
@@ -2353,76 +2355,174 @@ const createHubSpotProductPropertyPackageUnits = async (hubspotAccessToken: stri
 
 const createHubSpotProductPropertyTiersJson = async (hubspotAccessToken: string) => {
   try {
-      const response = await axios.post(
-          `https://api.hubapi.com/crm/v3/properties/products`,
-          {
-              name: "tiers_json",
-              label: "Tiered Pricing",
-              type: "string",
-              fieldType: "textarea",
-              groupName: "productinformation",
-              description: "JSON format of tiered pricing (e.g., price per tier)",
-              displayOrder: -1,
-              hasUniqueValue: false,
-              hidden: false,
-              formField: true,
-          },
-          {
-              headers: {
-                  Authorization: `Bearer ${hubspotAccessToken}`,
-                  "Content-Type": "application/json",
-              },
-          }
-      );
+    const response = await axios.post(
+      `https://api.hubapi.com/crm/v3/properties/products`,
+      {
+        name: "tiers_json",
+        label: "Tiered Pricing",
+        type: "string",
+        fieldType: "textarea",
+        groupName: "productinformation",
+        description: "JSON format of tiered pricing (e.g., price per tier)",
+        displayOrder: -1,
+        hasUniqueValue: false,
+        hidden: false,
+        formField: true,
+      },
+      {
+        headers: {
+          Authorization: `Bearer ${hubspotAccessToken}`,
+          "Content-Type": "application/json",
+        },
+      }
+    );
 
-      console.log("✅ Custom Property `tiers_json` Created:", response.data);
-      return response.data;
+    console.log("✅ Custom Property `tiers_json` Created:", response.data);
+    return response.data;
   } catch (error: any) {
-      console.error(
-          "❌ Error creating HubSpot product property:",
-          error.response?.data || error.message
-      );
+    console.error(
+      "❌ Error creating HubSpot product property:",
+      error.response?.data || error.message
+    );
   }
 };
 
 const createHubSpotProductPropertyTierMode = async (hubspotAccessToken: string) => {
   try {
-      const response = await axios.post(
-          `https://api.hubapi.com/crm/v3/properties/products`,
-          {
-              name: "tier_mode",
-              label: "Tier Pricing Mode",
-              type: "enumeration",
-              fieldType: "select",
-              groupName: "productinformation",
-              options: [
-                  { label: "Graduated", value: "graduated" },
-                  { label: "Volume", value: "volume" }
-              ],
-              description: "Defines whether pricing is graduated or volume-based",
-              displayOrder: -1,
-              hasUniqueValue: false,
-              hidden: false,
-              formField: true,
-          },
-          {
-              headers: {
-                  Authorization: `Bearer ${hubspotAccessToken}`,
-                  "Content-Type": "application/json",
-              },
-          }
-      );
+    const response = await axios.post(
+      `https://api.hubapi.com/crm/v3/properties/products`,
+      {
+        name: "tier_mode",
+        label: "Tier Pricing Mode",
+        type: "enumeration",
+        fieldType: "select",
+        groupName: "productinformation",
+        options: [
+          { label: "Graduated", value: "graduated" },
+          { label: "Volume", value: "volume" }
+        ],
+        description: "Defines whether pricing is graduated or volume-based",
+        displayOrder: -1,
+        hasUniqueValue: false,
+        hidden: false,
+        formField: true,
+      },
+      {
+        headers: {
+          Authorization: `Bearer ${hubspotAccessToken}`,
+          "Content-Type": "application/json",
+        },
+      }
+    );
 
-      console.log("✅ Custom Property `tier_mode` Created:", response.data);
-      return response.data;
+    console.log("✅ Custom Property `tier_mode` Created:", response.data);
+    return response.data;
   } catch (error: any) {
-      console.error(
-          "❌ Error creating HubSpot product property:",
-          error.response?.data || error.message
-      );
+    console.error(
+      "❌ Error creating HubSpot product property:",
+      error.response?.data || error.message
+    );
   }
 };
 
+const createHubSpotProductPropertyCurrency = async (hubspotAccessToken: string) => {
+  try {
+    const response = await axios.post(
+      `https://api.hubapi.com/crm/v3/properties/products`,
+      {
+        name: "currency",
+        label: "Currency",
+        type: "enumeration",
+        fieldType: "select",
+        groupName: "productinformation",
+        options: [
+          { label: "USD", value: "usd" },
+          { label: "EUR", value: "eur" },
+          { label: "GBP", value: "gbp" },
+          { label: "JPY", value: "jpy" },
+          { label: "CAD", value: "cad" },
+          { label: "AUD", value: "aud" },
+          { label: "CHF", value: "chf" },
+          { label: "CNY", value: "cny" },
+          { label: "SEK", value: "sek" },
+          { label: "NZD", value: "nzd" },
+          { label: "KRW", value: "krw" },
+          { label: "SGD", value: "sgd" },
+          { label: "NOK", value: "nok" },
+          { label: "MXN", value: "mxn" },
+          { label: "INR", value: "inr" },
+          { label: "BRL", value: "brl" },
+          { label: "RUB", value: "rub" },
+          { label: "HKD", value: "hkd" },
+          { label: "IDR", value: "idr" },
+          { label: "TWD", value: "twd" },
+          { label: "SAR", value: "sar" },
+          { label: "AED", value: "aed" },
+          { label: "ZAR", value: "zar" },
+          { label: "THB", value: "thb" },
+          { label: "TRY", value: "try" },
+          { label: "ILS", value: "ils" },
+          { label: "DKK", value: "dkk" },
+          { label: "PLN", value: "pln" },
+          { label: "PHP", value: "php" },
+          { label: "CZK", value: "czk" },
+          { label: "CLP", value: "clp" },
+        ],
+        description: "Currency code for the product",
+        displayOrder: -1,
+        hasUniqueValue: false,
+        hidden: false,
+        formField: true,
+      },
+      {
+        headers: {
+          Authorization: `Bearer ${hubspotAccessToken}`,
+          "Content-Type": "application/json",
+        },
+      }
+    );
+    console.log("✅ Custom Property `tier_mode` Created:", response.data);
+    return response.data;
+  } catch (error: any) {
+    console.error(
+      "❌ Error creating HubSpot product property:",
+      error.response?.data || error.message
+    );
+  }
+};
+
+const createHubSpotProductPropertyMeterId = async (hubspotAccessToken: string) => {
+  try {
+    const response = await axios.post(
+      `https://api.hubapi.com/crm/v3/properties/products`,
+      {
+        name: "stripe_meter_id",
+        label: "Stripe Meter ID",
+        type: "string",
+        fieldType: "text",
+        groupName: "productinformation",
+        description: "Meter ID for usage-based billing",
+        displayOrder: -1,
+        hasUniqueValue: false,
+        hidden: false,
+        formField: true,
+      },
+      {
+        headers: {
+          Authorization: `Bearer ${hubspotAccessToken}`,
+          "Content-Type": "application/json",
+        },
+      }
+    );
+    console.log("✅ Custom Property `meter_id` Created:", response.data);
+    return response.data;
+  } catch (error: any) {
+    console.error(
+      "❌ Error creating HubSpot product property:",
+      error.response?.data || error.message
+    );
+  }
+};
 
 
 const createusuagebasedHubSpotProperties = async (hubspotAccessToken: string) => {
@@ -2433,6 +2533,8 @@ const createusuagebasedHubSpotProperties = async (hubspotAccessToken: string) =>
   await createHubSpotProductPropertyPackageUnits(hubspotAccessToken);
   await createHubSpotProductPropertyTierMode(hubspotAccessToken);
   await createHubSpotProductPropertyTiersJson(hubspotAccessToken);
+  await createHubSpotProductPropertyCurrency(hubspotAccessToken);
+  await createHubSpotProductPropertyMeterId(hubspotAccessToken);
 };
 
 

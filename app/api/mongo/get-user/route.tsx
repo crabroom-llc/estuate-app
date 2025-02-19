@@ -8,7 +8,6 @@ export async function GET(request: Request) {
     try {
         // 🛑 Validate the JWT token
         const userData = await privateRoute(request);
-        console.log("🚀 => userData from private rourte", userData);
 
         if (userData instanceof NextResponse) {
             return userData;

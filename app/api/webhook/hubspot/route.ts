@@ -228,8 +228,14 @@ async function processWebhookEvents(parsedBody: any) {
       event.subscriptionType.endsWith(".creation")
     );
 
+    const hasCurrencyUpdated = parsedBody.some((event) =>
+      event?.propertyName?.includes("currency")
+    );
+
     // ✅ Track processed objectIds to ignore further events
     const processedObjects = new Set<string>();
+
+    const processedEvents = new Set<string>();
 
     // ✅ Process Webhook Events
     for (const event of parsedBody) {
@@ -245,7 +251,7 @@ async function processWebhookEvents(parsedBody: any) {
           console.warn(`⚠️ Skipping event due to missing objectId:`, event);
           continue;
         }
-
+        console.log(`🔹 Parsedbody: ${JSON.stringify(event)}`);
         console.log(`🔹 Event Type: ${subscriptionType}`);
         console.log(`🔹 Object ID: ${objectId}`);
 
@@ -253,6 +259,13 @@ async function processWebhookEvents(parsedBody: any) {
         if (hasCreationEvent && processedObjects.has(objectId)) {
           console.log(
             `⏩ Skipping event because ${objectId} was already processed.`
+          );
+          continue;
+        }
+
+        if (hasCurrencyUpdated && processedEvents.has(subscriptionType)) {
+          console.log(
+            `⏩ Skipping event because ${propertyName} was already processed.`
           );
           continue;
         }
@@ -312,6 +325,7 @@ async function processWebhookEvents(parsedBody: any) {
               propertyName,
               propertyValue
             );
+            processedEvents.add(subscriptionType);
             break;
 
           case "deal.propertyChange":

@@ -1,7 +1,7 @@
 import { getTokens } from "@/components/hubspotWebhookActivities/gettokens";
 import {
   fetchProduct,
-  updateHubSpotProduct,createusuagebasedHubSpotProperties
+  updateHubSpotProduct, createusuagebasedHubSpotProperties
 } from "@/components/hubspotActions/hubspotActions";
 import { createProduct } from "@/components/stripeActions/stripeActions";
 
@@ -24,10 +24,12 @@ const productCreated = async (portalId, objectId) => {
     }
     const productDescription = productData?.properties?.description;
 
-    if (productDescription?.includes("usuagebased")) {
+    if (productDescription?.includes("usagebased")) {
       console.log("The description contains 'usagebased'.");
-      await createusuagebasedHubSpotProperties(new_hubspot_access_token);  
-  }
+      // await createusuagebasedHubSpotProperties(new_hubspot_access_token); 
+      // when user provides oauth token for hubspot, we can create properties in hubspot
+      return;
+    }
     console.log("🔹 Product Data:", productData?.properties?.description);
     const stripeProductResponse = await createProduct(
       new_stripeAccessToken,
@@ -47,6 +49,7 @@ const productCreated = async (portalId, objectId) => {
       objectId,
       stripeProductId,
       stripePriceId,
+      "",
       new_hubspot_access_token
     );
 

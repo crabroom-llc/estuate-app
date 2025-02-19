@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import privateRoute from "@/utils/privateRoute";
 import { pool } from "@/utils/mysql";
 import { successObj } from "@/utils/responseObj";
+import { createusuagebasedHubSpotProperties } from "@/components/hubspotActions/hubspotActions";
 
 const HUBSPOT_CLIENT_ID = process.env.HUBSPOT_CLIENT_ID;
 const HUBSPOT_REDIRECT_URI = process.env.HUBSPOT_REDIRECT_URI as string;
@@ -137,7 +138,7 @@ export async function POST(request: Request) {
           [userId, access_token, refresh_token, expiryTime]
         );
       }
-
+      createusuagebasedHubSpotProperties(access_token);
       await connection.commit();
       connection.release();
     } catch (error) {

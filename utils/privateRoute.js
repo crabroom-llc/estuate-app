@@ -5,7 +5,6 @@ import { NextResponse } from 'next/server';
 const privateRoute = async (req) => {
     try {
         const headers = req.headers.get('Authorization');
-        console.log("🚀 => Authorization headers:", headers);
 
         if (!headers) {
             throw new Error('Access Denied: No Authorization header provided');
@@ -18,7 +17,6 @@ const privateRoute = async (req) => {
         }
 
         const decoded = jwt.verify(token, process.env.JWT_SECRET);
-        console.log("🚀 => decoded user:", decoded);
         if (!decoded) {
             throw new Error('Access Denied: Invalid token');
         }

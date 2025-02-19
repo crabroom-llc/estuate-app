@@ -337,6 +337,78 @@ const createProduct = async (stripeAccessToken, productData) => {
   }
 };
 
+const createUsageBasedProduct = async (stripeAccessToken, productData) => {
+  try {
+    const { id, properties } = productData || {}; // Default to an empty object if productData is undefined
+
+    const { name, price, sku, description, billing_frequency, createdate, hs_lastmodifieddate, billing_type, usage_model, unit_price, package_price, package_units, tier_mode, tiers_json, currency, stripe_product_id } = properties || {};
+
+    if (!name || !price) {
+      console.error("❌ Error: Missing required fields (name or price).");
+      return;
+    }
+
+    // Convert price to cents (Stripe expects amounts in cents)
+    const priceInCents = Math.round(parseFloat(unit_price) * 100);
+
+    const stripe = new Stripe(stripeAccessToken as string, {
+      apiVersion: "2023-10-16" as Stripe.LatestApiVersion,
+    });
+
+    // 🔹 Step 1: Create the Product in Stripe
+    const stripeProduct = await stripe.products.create({
+      name,
+      description,
+      metadata: {
+        hubspot_product_id: id,
+        hubspot_sku: sku || "N/A",
+        hubspot_created_at: createdate || "N/A",
+        hubspot_last_modified: hs_lastmodifieddate || "N/A",
+        pricing_model: billing_type,
+        usage_type: usage_model,
+        deleted: "false",
+      },
+    });
+
+    const stripeMeter = await stripe.billing.meters.create({
+      display_name: `${name}_meter`,
+      event_name: `${name}_event`,
+      default_aggregation: {
+        formula: 'sum',
+      },
+      value_settings: {
+        event_payload_key: 'value',
+      },
+    });
+
+    // 🔹 Step 2: Create a Per-Unit Usage-Based Price in Stripe
+    const stripePrice = await stripe.prices.create({
+      unit_amount: priceInCents,
+      currency: currency.toLowerCase(), // Ensure currency is in lowercase
+      product: stripeProduct.id,
+      recurring: {
+        interval: "month",
+        usage_type: "metered",
+        meter: stripeMeter.id,
+      },
+      billing_scheme: usage_model,
+      metadata: {
+        pricing_model: "usage_based",
+        usage_type: "per_unit",
+        deleted: "false",
+        meterId: stripeMeter.id,
+      },
+    });
+
+    console.log("✅ Stripe Usage-Based Product Created:", stripeProduct.id);
+    console.log("✅ Stripe Per-Unit Price Created:", stripePrice.id);
+
+    return { productId: stripeProduct.id, priceId: stripePrice.id, meterId: stripeMeter.id };
+  } catch (error) {
+    console.error("❌ Error creating usage-based product:", error);
+  }
+};
+
 const updateStripeProduct = async (
   stripeAccessToken: string,
   propertyName: string,
@@ -388,6 +460,14 @@ const updateStripeProduct = async (
         );
         return { price_id: stripePriceId }; // Pricing handled separately, exit function
 
+      case "unit_price":
+        console.log(`⏳ Updating Stripe price for product: ${productId}...`);
+        stripePriceId = await updateStripePricamount(
+          stripe,
+          productId,
+          propertyValue
+        );
+        return stripePriceId;
       default:
         // If property is not a standard Stripe field, update it in metadata
         metadataUpdate[propertyName] = propertyValue;
@@ -515,6 +595,7 @@ const updateStripePricamount = async (
 
     // Use the most recent active price as a reference
     const oldPrice = prices.data[0] ?? {};
+    const meterId = oldPrice.recurring?.meter;
 
     // ✅ Copy all attributes except `unit_amount`
     const newPriceData: Stripe.PriceCreateParams = {
@@ -523,11 +604,12 @@ const updateStripePricamount = async (
       product: productId,
       recurring: oldPrice.recurring
         ? {
-            interval: oldPrice.recurring.interval,
-            interval_count: oldPrice.recurring.interval_count ?? 1, // Default to 1
-            usage_type: oldPrice.recurring.usage_type ?? "licensed", // Default value
-            aggregate_usage: oldPrice.recurring.aggregate_usage ?? undefined, // Optional
-          }
+          interval: oldPrice.recurring.interval,
+          interval_count: oldPrice.recurring.interval_count ?? 1, // Default to 1
+          usage_type: oldPrice.recurring.usage_type ?? "licensed", // Default value
+          aggregate_usage: oldPrice.recurring.aggregate_usage ?? undefined, // Optional
+          meter: oldPrice.recurring.meter ?? undefined, // Optional
+        }
         : undefined, // Fix: Ensure correct type
 
       metadata: oldPrice.metadata ?? {}, // Copy metadata
@@ -555,6 +637,10 @@ const updateStripePricamount = async (
         await stripe.prices.update(price.id, { active: false });
         console.log(`❌ Deactivated old price: ${price.id}`);
       }
+    }
+
+    if (meterId) {
+      return { price_id: newPriceObj.id, meter_id: meterId };
     }
 
     return newPriceObj.id;
@@ -853,7 +939,7 @@ const processStripePayments = async (dealData, stripeAccessToken) => {
           );
           responseData.invoices.push({
             id: manualInvoice.id,
-            created_at: new Date(manualInvoice.created * 1000).toISOString(), 
+            created_at: new Date(manualInvoice.created * 1000).toISOString(),
           }); // ✅ Collect Manual Invoice ID
           return responseData;
         } else {
@@ -888,7 +974,7 @@ const processStripePayments = async (dealData, stripeAccessToken) => {
           );
           responseData.invoices.push({
             id: invoice.id,
-            created_at: new Date(invoice.created * 1000).toISOString(), 
+            created_at: new Date(invoice.created * 1000).toISOString(),
           });
         } else {
           console.error(
@@ -943,7 +1029,7 @@ const processStripePayments = async (dealData, stripeAccessToken) => {
           )) as
             | { subscriptionId: string; subscriptionCreated: number; invoiceId: string | null; invoiceCreated: number | null }
             | { subscriptionId: string; subscriptionCreated: number; invoiceId: string | null; invoiceCreated: number | null }[];
-          
+
 
           if (subscriptionWithInvoice) {
             console.log(
@@ -956,14 +1042,14 @@ const processStripePayments = async (dealData, stripeAccessToken) => {
             if (!responseData.invoices) {
               responseData.invoices = [];
             }
-            
+
             if (Array.isArray(subscriptionWithInvoice)) {
               subscriptionWithInvoice.forEach((sub) => {
                 responseData.subscriptions.push({
                   id: sub.subscriptionId,
                   created_at: new Date(sub.subscriptionCreated * 1000).toISOString(), // ✅ Use correct subscription timestamp
                 });
-            
+
                 if (sub.invoiceId && sub.invoiceCreated !== null) {  // ✅ Ensure invoiceCreated is not null
                   responseData.invoices.push({
                     id: sub.invoiceId,
@@ -981,8 +1067,8 @@ const processStripePayments = async (dealData, stripeAccessToken) => {
                 id: subscriptionWithInvoice.subscriptionId,
                 created_at: new Date(subscriptionWithInvoice.subscriptionCreated * 1000).toISOString(), // ✅ Use correct subscription timestamp
               });
-            
-              if (subscriptionWithInvoice.invoiceId && subscriptionWithInvoice.invoiceCreated !== null) {  
+
+              if (subscriptionWithInvoice.invoiceId && subscriptionWithInvoice.invoiceCreated !== null) {
                 responseData.invoices.push({
                   id: subscriptionWithInvoice.invoiceId,
                   created_at: new Date(subscriptionWithInvoice.invoiceCreated * 1000).toISOString(), // ✅ Safe conversion
@@ -993,10 +1079,10 @@ const processStripePayments = async (dealData, stripeAccessToken) => {
                   created_at: "", // ✅ Handle null timestamp gracefully
                 });
               }
-              
+
             }
-                   
-            
+
+
           } else {
             console.error(
               `❌ Failed to create subscription with invoice for Customer ${customerId}`
@@ -1770,7 +1856,7 @@ const createSubscriptionWithInvoice = async (
           metadata: {
             deal_id: dealId,
             subscription_id: subscription.id,
-           
+
           },
         });
 
@@ -2236,7 +2322,7 @@ const checkPaymentMethod = async (
       const invoice = await stripe.invoices.retrieve(invoice_id);
       const payment_intent_id = invoice.payment_intent as string;
       console.log("Payment Intent ID:", payment_intent_id);
-      if(!payment_intent_id){
+      if (!payment_intent_id) {
         console.log("Payment Intent ID not found to sav the payment method");
         return;
       }
@@ -2291,5 +2377,6 @@ export {
   getProductStripeId,
   deleteStripeProduct,
   fetchStripeInvoice,
-  checkPaymentMethod
+  checkPaymentMethod,
+  createUsageBasedProduct
 };
