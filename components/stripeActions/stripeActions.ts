@@ -337,7 +337,7 @@ const createProduct = async (stripeAccessToken, productData) => {
   }
 };
 
-const createUsageBasedProduct = async (stripeAccessToken, productData) => {
+const createUsageBasedProductPerUnit = async (stripeAccessToken, productData) => {
   try {
     const { id, properties } = productData || {}; // Default to an empty object if productData is undefined
 
@@ -392,6 +392,82 @@ const createUsageBasedProduct = async (stripeAccessToken, productData) => {
         meter: stripeMeter.id,
       },
       billing_scheme: usage_model,
+      metadata: {
+        pricing_model: "usage_based",
+        usage_type: "per_unit",
+        deleted: "false",
+        meterId: stripeMeter.id,
+      },
+    });
+
+    console.log("✅ Stripe Usage-Based Product Created:", stripeProduct.id);
+    console.log("✅ Stripe Per-Unit Price Created:", stripePrice.id);
+
+    return { productId: stripeProduct.id, priceId: stripePrice.id, meterId: stripeMeter.id };
+  } catch (error) {
+    console.error("❌ Error creating usage-based product:", error);
+  }
+};
+
+const createUsageBasedProductPerPackage = async (stripeAccessToken, productData) => {
+  try {
+    const { id, properties } = productData || {}; // Default to an empty object if productData is undefined
+
+    const { name, price, sku, description, billing_frequency, createdate, hs_lastmodifieddate, billing_type, usage_model, unit_price, package_price, package_units, tier_mode, tiers_json, currency, stripe_product_id } = properties || {};
+
+    if (!name || !price) {
+      console.error("❌ Error: Missing required fields (name or price).");
+      return;
+    }
+
+    // Convert price to cents (Stripe expects amounts in cents)
+    const priceInCents = Math.round(parseFloat(package_price) * 100);
+
+    const stripe = new Stripe(stripeAccessToken as string, {
+      apiVersion: "2023-10-16" as Stripe.LatestApiVersion,
+    });
+
+    // 🔹 Step 1: Create the Product in Stripe
+    const stripeProduct = await stripe.products.create({
+      name,
+      description,
+      metadata: {
+        hubspot_product_id: id,
+        hubspot_sku: sku || "N/A",
+        hubspot_created_at: createdate || "N/A",
+        hubspot_last_modified: hs_lastmodifieddate || "N/A",
+        pricing_model: billing_type,
+        usage_type: usage_model,
+        deleted: "false",
+      },
+    });
+
+    const stripeMeter = await stripe.billing.meters.create({
+      display_name: `${name}_meter`,
+      event_name: `${name}_event`,
+      default_aggregation: {
+        formula: 'sum',
+      },
+      value_settings: {
+        event_payload_key: 'value',
+      },
+    });
+
+    // 🔹 Step 2: Create a Per-Unit Usage-Based Price in Stripe
+    const stripePrice = await stripe.prices.create({
+      unit_amount: priceInCents,
+      currency: currency.toLowerCase(), // Ensure currency is in lowercase
+      product: stripeProduct.id,
+      recurring: {
+        interval: "month",
+        usage_type: "metered",
+        meter: stripeMeter.id,
+      },
+      billing_scheme: "per_unit",
+      transform_quantity: {
+        divide_by: package_units,
+        round: "up"
+      },
       metadata: {
         pricing_model: "usage_based",
         usage_type: "per_unit",
@@ -2378,5 +2454,6 @@ export {
   deleteStripeProduct,
   fetchStripeInvoice,
   checkPaymentMethod,
-  createUsageBasedProduct
+  createUsageBasedProductPerUnit,
+  createUsageBasedProductPerPackage
 };
