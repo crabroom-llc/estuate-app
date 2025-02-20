@@ -485,6 +485,101 @@ const createUsageBasedProductPerPackage = async (stripeAccessToken, productData)
   }
 };
 
+const createUsageBasedProductPerTeir = async (stripeAccessToken, productData) => {
+  try {
+    const { id, properties } = productData || {}; // Default to an empty object if productData is undefined
+
+    const { name, price, sku, description, billing_frequency, createdate, hs_lastmodifieddate, billing_type, usage_model, unit_price, package_price, package_units, tier_mode, tiers_json, currency, stripe_product_id } = properties || {};
+
+    if (!name || !price) {
+      console.error("❌ Error: Missing required fields (name or price).");
+      return;
+    }
+
+    // Convert price to cents (Stripe expects amounts in cents)
+    const priceInCents = Math.round(parseFloat(package_price) * 100);
+
+    const stripe = new Stripe(stripeAccessToken as string, {
+      apiVersion: "2023-10-16" as Stripe.LatestApiVersion,
+    });
+
+    // 🔹 Step 1: Create the Product in Stripe
+    const stripeProduct = await stripe.products.create({
+      name,
+      description,
+      metadata: {
+        hubspot_product_id: id,
+        hubspot_sku: sku || "N/A",
+        hubspot_created_at: createdate || "N/A",
+        hubspot_last_modified: hs_lastmodifieddate || "N/A",
+        pricing_model: billing_type,
+        usage_type: usage_model,
+        deleted: "false",
+      },
+    });
+
+    const stripeMeter = await stripe.billing.meters.create({
+      display_name: `${name}_meter`,
+      event_name: `${name}_event`,
+      default_aggregation: {
+        formula: 'sum',
+      },
+      value_settings: {
+        event_payload_key: 'value',
+      },
+    });
+
+    console.log("JSON coming from HubSpot:", tiers_json);
+
+    // ✅ Ensure tiers_json is a valid object or parse it if it's a string
+    let tiers;
+    if (typeof tiers_json === "string") {
+      tiers = JSON.parse(tiers_json);
+    } else if (Array.isArray(tiers_json)) {
+      tiers = tiers_json;
+    } else {
+      throw new Error("Invalid tiers_json format");
+    }
+
+    // ✅ Convert unit_amount to cents
+    const formattedTiers = tiers.map((tier) => ({
+      up_to: tier.up_to, // Keep up_to as is
+      unit_amount: Math.round(parseFloat(tier.unit_amount) * 100), // Convert to cents
+    }));
+
+    console.log("✅ Formatted tiers:", formattedTiers);
+
+
+    // 🔹 Step 2: Create a Per-Unit Usage-Based Price in Stripe
+    const stripePrice = await stripe.prices.create({
+      // unit_amount: priceInCents,
+      currency: currency.toLowerCase(), // Ensure currency is in lowercase
+      product: stripeProduct.id,
+      recurring: {
+        interval: "month",
+        usage_type: "metered",
+        meter: stripeMeter.id,
+      },
+      billing_scheme: "tiered",
+      tiers_mode: tier_mode,
+      tiers: formattedTiers,
+      metadata: {
+        pricing_model: "usage_based",
+        usage_type: "per_unit",
+        deleted: "false",
+        meterId: stripeMeter.id,
+      },
+    });
+
+    console.log("✅ Stripe Usage-Based Product Created:", stripeProduct.id);
+    console.log("✅ Stripe Per-Unit Price Created:", stripePrice.id);
+
+    return { productId: stripeProduct.id, priceId: stripePrice.id, meterId: stripeMeter.id };
+  } catch (error) {
+    console.error("❌ Error creating usage-based product:", error);
+  }
+};
+
 const updateStripeProduct = async (
   stripeAccessToken: string,
   propertyName: string,
@@ -539,6 +634,42 @@ const updateStripeProduct = async (
       case "unit_price":
         console.log(`⏳ Updating Stripe price for product: ${productId}...`);
         stripePriceId = await updateStripePricamount(
+          stripe,
+          productId,
+          propertyValue
+        );
+        return stripePriceId;
+
+      case "currency":
+        console.log(`⏳ Updating Stripe price for product: ${productId}...`);
+        stripePriceId = await updateStripeCurrency(
+          stripe,
+          productId,
+          propertyValue
+        );
+        return stripePriceId;
+
+      case "package_price":
+        console.log(`⏳ Updating Stripe price for product: ${productId}...`);
+        stripePriceId = await updateStripePackagePrice(
+          stripe,
+          productId,
+          propertyValue
+        );
+        return stripePriceId;
+
+      case "tier_mode":
+        console.log(`⏳ Updating Stripe price for product: ${productId}...`);
+        stripePriceId = await updateStripeTierMode(
+          stripe,
+          productId,
+          propertyValue
+        );
+        return stripePriceId;
+      
+      case "tiers_json":
+        console.log(`⏳ Updating Stripe price for product: ${productId}...`);
+        stripePriceId = await updateStripeTiers(
           stripe,
           productId,
           propertyValue
@@ -725,6 +856,444 @@ const updateStripePricamount = async (
     return null;
   }
 };
+
+const updateStripeCurrency = async (
+  stripe: Stripe,
+  productId: string,
+  currency: string
+) => {
+  try {
+    console.log(
+      `🔄 Updating currency for product: ${productId} to ${currency}`
+    );
+
+    // Fetch the existing active price(s)
+    const prices = await stripe.prices.list({
+      product: productId,
+      active: true,
+      expand: ['data.tiers']
+    });
+
+    if (prices.data.length === 0) {
+      console.warn(
+        `⚠️ No active price found for product ${productId}. Creating a new one.`
+      );
+    }
+
+
+    // Use the most recent active price as a reference
+    const oldPrice = prices.data[0] ?? {};
+    const meterId = oldPrice.recurring?.meter;
+    console.log("🚀 => oldPrice.tiers:", oldPrice);
+
+    // ✅ Copy all attributes except `unit_amount`
+    const newPriceData: Stripe.PriceCreateParams = {
+      unit_amount: oldPrice.unit_amount ?? undefined, // Keep same amount or undefined
+      currency: currency || "usd", // Keep same currency, default to "usd"
+      product: productId,
+      recurring: oldPrice.recurring
+        ? {
+          interval: oldPrice.recurring.interval,
+          interval_count: oldPrice.recurring.interval_count ?? 1, // Default to 1
+          usage_type: oldPrice.recurring.usage_type ?? "licensed", // Default value
+          aggregate_usage: oldPrice.recurring.aggregate_usage ?? undefined, // Optional
+          meter: oldPrice.recurring.meter ?? undefined, // Optional
+        }
+        : undefined, // Fix: Ensure correct type
+
+      metadata: oldPrice.metadata ?? {}, // Copy metadata
+      tax_behavior: oldPrice.tax_behavior ?? "unspecified", // Copy tax behavior
+      billing_scheme: oldPrice.billing_scheme ?? "per_unit", // Copy billing scheme
+      tiers_mode: oldPrice.tiers_mode ?? undefined, // Fix
+      tiers: oldPrice.tiers?.map((tier: any) => {
+        return {
+          up_to: tier.up_to ?? 'inf',
+          unit_amount: tier.unit_amount,
+        }
+      }) as Stripe.PriceCreateParams.Tier[], // Fix
+      transform_quantity: oldPrice.transform_quantity ?? undefined, // Fix
+      nickname: oldPrice.nickname ?? undefined, // Fix
+    };
+
+    console.log(
+      `🔹 Creating a new price for product ${productId} with updated amount...`
+    );
+
+    // ✅ Create new price with copied attributes
+    const newPriceObj = await stripe.prices.create(newPriceData);
+
+    console.log(
+      `✅ New price created: ${newPriceObj.id} (Amount: ${newPriceObj.unit_amount} cents)`
+    );
+
+    // ✅ Deactivate old price(s)
+    for (const price of prices.data) {
+      if (price.id !== newPriceObj.id) {
+        await stripe.prices.update(price.id, { active: false });
+        console.log(`❌ Deactivated old price: ${price.id}`);
+      }
+    }
+
+    if (meterId) {
+      return { price_id: newPriceObj.id, meter_id: meterId };
+    }
+
+    return newPriceObj.id;
+  } catch (error) {
+    console.error("❌ Error updating Stripe price:", error);
+    return null;
+  }
+};
+
+const updateStripeTierMode = async (
+  stripe: Stripe,
+  productId: string,
+  tierMode: string
+) => {
+  try {
+    console.log(
+      `🔄 Updating tier mode for product: ${productId} to ${tierMode}`
+    );
+
+    // Fetch the existing active price(s)
+    const prices = await stripe.prices.list({
+      product: productId,
+      active: true,
+      expand: ['data.tiers']
+    });
+
+    if (prices.data.length === 0) {
+      console.warn(
+        `⚠️ No active price found for product ${productId}. Creating a new one.`
+      );
+    }
+
+
+    // Use the most recent active price as a reference
+    const oldPrice = prices.data[0] ?? {};
+    const meterId = oldPrice.recurring?.meter;
+    console.log("🚀 => oldPrice.tiers:", oldPrice);
+
+    // ✅ Copy all attributes except `unit_amount`
+    const newPriceData: Stripe.PriceCreateParams = {
+      unit_amount: oldPrice.unit_amount ?? undefined, // Keep same amount or undefined
+      currency: oldPrice.currency || "usd", // Keep same currency, default to "usd"
+      product: productId,
+      recurring: oldPrice.recurring
+        ? {
+          interval: oldPrice.recurring.interval,
+          interval_count: oldPrice.recurring.interval_count ?? 1, // Default to 1
+          usage_type: oldPrice.recurring.usage_type ?? "licensed", // Default value
+          aggregate_usage: oldPrice.recurring.aggregate_usage ?? undefined, // Optional
+          meter: oldPrice.recurring.meter ?? undefined, // Optional
+        }
+        : undefined, // Fix: Ensure correct type
+
+      metadata: oldPrice.metadata ?? {}, // Copy metadata
+      tax_behavior: oldPrice.tax_behavior ?? "unspecified", // Copy tax behavior
+      billing_scheme: oldPrice.billing_scheme ?? "per_unit", // Copy billing scheme
+      tiers_mode: tierMode as Stripe.PriceCreateParams.TiersMode || undefined, // Fix
+      tiers: oldPrice.tiers?.map((tier: any) => {
+        return {
+          up_to: tier.up_to ?? 'inf',
+          unit_amount: tier.unit_amount,
+        }
+      }) as Stripe.PriceCreateParams.Tier[], // Fix
+      transform_quantity: oldPrice.transform_quantity ?? undefined, // Fix
+      nickname: oldPrice.nickname ?? undefined, // Fix
+    };
+
+    console.log(
+      `🔹 Creating a new price for product ${productId} with updated amount...`
+    );
+
+    // ✅ Create new price with copied attributes
+    const newPriceObj = await stripe.prices.create(newPriceData);
+
+    console.log(
+      `✅ New price created: ${newPriceObj.id} (Amount: ${newPriceObj.unit_amount} cents)`
+    );
+
+    // ✅ Deactivate old price(s)
+    for (const price of prices.data) {
+      if (price.id !== newPriceObj.id) {
+        await stripe.prices.update(price.id, { active: false });
+        console.log(`❌ Deactivated old price: ${price.id}`);
+      }
+    }
+
+    if (meterId) {
+      return { price_id: newPriceObj.id, meter_id: meterId };
+    }
+
+    return newPriceObj.id;
+  } catch (error) {
+    console.error("❌ Error updating Stripe price:", error);
+    return null;
+  }
+};
+
+const updateStripeTiers = async (
+  stripe: Stripe,
+  productId: string,
+  tiers_json: string | any[]
+) => {
+  try {
+    console.log(
+      `🔄 Updating tiers_json for product: ${productId} to ${tiers_json}`
+    );
+
+    // Fetch the existing active price(s)
+    const prices = await stripe.prices.list({
+      product: productId,
+      active: true,
+      expand: ['data.tiers']
+    });
+
+    if (prices.data.length === 0) {
+      console.warn(
+        `⚠️ No active price found for product ${productId}. Creating a new one.`
+      );
+    }
+
+    let tiers;
+    if (typeof tiers_json === "string") {
+      tiers = JSON.parse(tiers_json);
+    } else if (Array.isArray(tiers_json)) {
+      tiers = tiers_json;
+    } else {
+      throw new Error("Invalid tiers_json format");
+    }
+
+    // ✅ Convert unit_amount to cents
+    const formattedTiers = tiers.map((tier) => ({
+      up_to: tier.up_to, // Keep up_to as is
+      unit_amount: Math.round(parseFloat(tier.unit_amount) * 100), // Convert to cents
+    }));
+
+    // Use the most recent active price as a reference
+    const oldPrice = prices.data[0] ?? {};
+    const meterId = oldPrice.recurring?.meter;
+
+    // ✅ Copy all attributes except `unit_amount`
+    const newPriceData: Stripe.PriceCreateParams = {
+      unit_amount: oldPrice.unit_amount ?? undefined, // Keep same amount or undefined
+      currency: oldPrice.currency || "usd", // Keep same currency, default to "usd"
+      product: productId,
+      recurring: oldPrice.recurring
+        ? {
+          interval: oldPrice.recurring.interval,
+          interval_count: oldPrice.recurring.interval_count ?? 1, // Default to 1
+          usage_type: oldPrice.recurring.usage_type ?? "licensed", // Default value
+          aggregate_usage: oldPrice.recurring.aggregate_usage ?? undefined, // Optional
+          meter: oldPrice.recurring.meter ?? undefined, // Optional
+        }
+        : undefined, // Fix: Ensure correct type
+
+      metadata: oldPrice.metadata ?? {}, // Copy metadata
+      tax_behavior: oldPrice.tax_behavior ?? "unspecified", // Copy tax behavior
+      billing_scheme: oldPrice.billing_scheme ?? "per_unit", // Copy billing scheme
+      tiers_mode: oldPrice.tiers_mode ?? undefined, // Fix
+      tiers: formattedTiers,
+      transform_quantity: oldPrice.transform_quantity ?? undefined, // Fix
+      nickname: oldPrice.nickname ?? undefined, // Fix
+    };
+
+    console.log(
+      `🔹 Creating a new price for product ${productId} with updated amount...`
+    );
+
+    // ✅ Create new price with copied attributes
+    const newPriceObj = await stripe.prices.create(newPriceData);
+
+    console.log(
+      `✅ New price created: ${newPriceObj.id} (Amount: ${newPriceObj.unit_amount} cents)`
+    );
+
+    // ✅ Deactivate old price(s)
+    for (const price of prices.data) {
+      if (price.id !== newPriceObj.id) {
+        await stripe.prices.update(price.id, { active: false });
+        console.log(`❌ Deactivated old price: ${price.id}`);
+      }
+    }
+
+    if (meterId) {
+      return { price_id: newPriceObj.id, meter_id: meterId };
+    }
+
+    return newPriceObj.id;
+  } catch (error) {
+    console.error("❌ Error updating Stripe price:", error);
+    return null;
+  }
+};
+
+const updateStripePackagePrice = async (
+  stripe: Stripe,
+  productId: string,
+  packagePrice: string
+) => {
+  try {
+    console.log(
+      `🔄 Updating package price for product: ${productId} to ${packagePrice}`
+    );
+
+    // Fetch the existing active price(s)
+    const prices = await stripe.prices.list({
+      product: productId,
+      active: true,
+    });
+
+    if (prices.data.length === 0) {
+      console.warn(
+        `⚠️ No active price found for product ${productId}. Creating a new one.`
+      );
+    }
+
+    // Use the most recent active price as a reference
+    const oldPrice = prices.data[0] ?? {};
+    const meterId = oldPrice.recurring?.meter;
+
+    // Convert price to cents
+    const newPriceInCents = parseInt(packagePrice) * 100;
+
+    // ✅ Copy all attributes except `unit_amount`
+    const newPriceData: Stripe.PriceCreateParams = {
+      unit_amount: newPriceInCents,
+      currency: oldPrice.currency || "usd", // Keep same currency, default to "usd"
+      product: productId,
+      recurring: oldPrice.recurring
+        ? {
+          interval: oldPrice.recurring.interval,
+          interval_count: oldPrice.recurring.interval_count ?? 1, // Default to 1
+          usage_type: oldPrice.recurring.usage_type ?? "licensed", // Default value
+          aggregate_usage: oldPrice.recurring.aggregate_usage ?? undefined, // Optional
+          meter: oldPrice.recurring.meter ?? undefined, // Optional
+        }
+        : undefined, // Fix: Ensure correct type
+
+      metadata: oldPrice.metadata ?? {}, // Copy metadata
+      tax_behavior: oldPrice.tax_behavior ?? "unspecified", // Copy tax behavior
+      billing_scheme: oldPrice.billing_scheme ?? "per_unit", // Copy billing scheme
+      tiers_mode: oldPrice.tiers_mode ?? undefined, // Fix
+      transform_quantity: oldPrice.transform_quantity ?? undefined, // Fix
+      nickname: oldPrice.nickname ?? undefined, // Fix
+    };
+
+    console.log(
+      `🔹 Creating a new price for product ${productId} with updated amount...`
+    );
+
+    // ✅ Create new price with copied attributes
+    const newPriceObj = await stripe.prices.create(newPriceData);
+
+    console.log(
+      `✅ New price created: ${newPriceObj.id} (Amount: ${newPriceObj.unit_amount} cents)`
+    );
+
+    // ✅ Deactivate old price(s)
+    for (const price of prices.data) {
+      if (price.id !== newPriceObj.id) {
+        await stripe.prices.update(price.id, { active: false });
+        console.log(`❌ Deactivated old price: ${price.id}`);
+      }
+    }
+
+    if (meterId) {
+      return { price_id: newPriceObj.id, meter_id: meterId };
+    }
+
+    return newPriceObj.id;
+  } catch (error) {
+    console.error("❌ Error updating Stripe price:", error);
+    return null;
+  }
+};
+
+const updateStripePackageUnits = async (
+  stripe: Stripe,
+  productId: string,
+  packageUnits: number
+) => {
+  try {
+    console.log(
+      `🔄 Updating package units for product: ${productId} to ${packageUnits}`
+    );
+
+    // Fetch the existing active price(s)
+    const prices = await stripe.prices.list({
+      product: productId,
+      active: true,
+    });
+
+    if (prices.data.length === 0) {
+      console.warn(
+        `⚠️ No active price found for product ${productId}. Creating a new one.`
+      );
+    }
+
+    // Use the most recent active price as a reference
+    const oldPrice = prices.data[0] ?? {};
+    const meterId = oldPrice.recurring?.meter;
+
+    // Convert price to cents
+
+    // ✅ Copy all attributes except `unit_amount`
+    const newPriceData: Stripe.PriceCreateParams = {
+      unit_amount: oldPrice.unit_amount ?? undefined, // Keep same amount or undefined
+      currency: oldPrice.currency || "usd", // Keep same currency, default to "usd"
+      product: productId,
+      recurring: oldPrice.recurring
+        ? {
+          interval: oldPrice.recurring.interval,
+          interval_count: oldPrice.recurring.interval_count ?? 1, // Default to 1
+          usage_type: oldPrice.recurring.usage_type ?? "licensed", // Default value
+          aggregate_usage: oldPrice.recurring.aggregate_usage ?? undefined, // Optional
+          meter: oldPrice.recurring.meter ?? undefined, // Optional
+        }
+        : undefined, // Fix: Ensure correct type
+
+      metadata: oldPrice.metadata ?? {}, // Copy metadata
+      tax_behavior: oldPrice.tax_behavior ?? "unspecified", // Copy tax behavior
+      billing_scheme: oldPrice.billing_scheme ?? "per_unit", // Copy billing scheme
+      tiers_mode: oldPrice.tiers_mode ?? undefined, // Fix
+      transform_quantity: {
+        divide_by: packageUnits,
+        round: "up"
+      },
+      nickname: oldPrice.nickname ?? undefined, // Fix
+    };
+
+    console.log(
+      `🔹 Creating a new price for product ${productId} with updated amount...`
+    );
+
+    // ✅ Create new price with copied attributes
+    const newPriceObj = await stripe.prices.create(newPriceData);
+
+    console.log(
+      `✅ New price created: ${newPriceObj.id} (Amount: ${newPriceObj.unit_amount} cents)`
+    );
+
+    // ✅ Deactivate old price(s)
+    for (const price of prices.data) {
+      if (price.id !== newPriceObj.id) {
+        await stripe.prices.update(price.id, { active: false });
+        console.log(`❌ Deactivated old price: ${price.id}`);
+      }
+    }
+
+    if (meterId) {
+      return { price_id: newPriceObj.id, meter_id: meterId };
+    }
+
+    return newPriceObj.id;
+  } catch (error) {
+    console.error("❌ Error updating Stripe price:", error);
+    return null;
+  }
+}
 
 const fetchStripePriceDetails = async (stripeAccessToken, priceId) => {
   try {
@@ -2455,5 +3024,6 @@ export {
   fetchStripeInvoice,
   checkPaymentMethod,
   createUsageBasedProductPerUnit,
-  createUsageBasedProductPerPackage
+  createUsageBasedProductPerPackage,
+  createUsageBasedProductPerTeir
 };

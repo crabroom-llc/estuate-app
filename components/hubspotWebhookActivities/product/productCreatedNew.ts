@@ -3,7 +3,7 @@ import {
     fetchProduct,
     updateHubSpotProduct, createusuagebasedHubSpotProperties
 } from "@/components/hubspotActions/hubspotActions";
-import { createProduct, createUsageBasedProductPerPackage, createUsageBasedProductPerUnit } from "@/components/stripeActions/stripeActions";
+import { createProduct, createUsageBasedProductPerPackage, createUsageBasedProductPerTeir, createUsageBasedProductPerUnit } from "@/components/stripeActions/stripeActions";
 
 const productCreated = async (portalId, object) => {
     try {
@@ -119,6 +119,34 @@ const productCreated = async (portalId, object) => {
                     );
                 }
                 break;
+            case "per_tier":
+                if (!object.properties.tier_mode || !object.properties.tiers_json) {
+                    console.log("No tier mode or tiers found");
+                    return;
+                } else {
+                    const stripeProductResponse = await createUsageBasedProductPerTeir(new_stripeAccessToken, object);
+                    console.log("🚀 => stripeProductResponse:", stripeProductResponse);
+                    if (!stripeProductResponse) {
+                        console.error("❌ Failed to create usage-based product in Stripe.");
+                        return;
+                    }
+                    const stripeProductId = stripeProductResponse.productId;
+                    const stripePriceId = stripeProductResponse.priceId;
+                    const stripeMeteredId = stripeProductResponse.meterId;
+
+                    const updatedProduct = await updateHubSpotProduct(
+                        object.id,
+                        stripeProductId,
+                        stripePriceId,
+                        stripeMeteredId,
+                        new_hubspot_access_token
+                    );
+
+                    console.log(
+                        "✅ Product processing completed successfully!",
+                        updatedProduct
+                    );
+                }
         }
 
 
