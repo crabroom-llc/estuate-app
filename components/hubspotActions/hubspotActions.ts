@@ -233,7 +233,7 @@ const fetchProductById = async (
       },
       params: {
         properties:
-          "name,price,sku,description,billing_frequency,createdate,hs_lastmodifieddate,billing_type,usage_model,unit_price,package_price,package_units,tier_mode,tiers_json,currency,stripe_product_id",
+          "name,price,sku,description,billing_frequency,createdate,recurringbillingfrequency,hs_lastmodifieddate,billing_type,usage_model,unit_price,package_price,package_units,tier_mode,tiers_json,currency,stripe_product_id",
       },
     });
 

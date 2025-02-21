@@ -341,15 +341,69 @@ const createUsageBasedProductPerUnit = async (stripeAccessToken, productData) =>
   try {
     const { id, properties } = productData || {}; // Default to an empty object if productData is undefined
 
-    const { name, price, sku, description, billing_frequency, createdate, hs_lastmodifieddate, billing_type, usage_model, unit_price, package_price, package_units, tier_mode, tiers_json, currency, stripe_product_id } = properties || {};
+    const { name, price, sku, description, recurringbillingfrequency, createdate, hs_lastmodifieddate, billing_type, usage_model, unit_price, package_price, package_units, tier_mode, tiers_json, currency, stripe_product_id } = properties || {};
 
     if (!name || !price) {
       console.error("❌ Error: Missing required fields (name or price).");
       return;
     }
 
+    const billing_frequency = recurringbillingfrequency;
     // Convert price to cents (Stripe expects amounts in cents)
     const priceInCents = Math.round(parseFloat(unit_price) * 100);
+
+    // Determine billing frequency for Stripe pricing
+    let stripeRecurring: Stripe.PriceCreateParams.Recurring | undefined;
+
+    if (billing_frequency && billing_frequency.toLowerCase() != "one_time") {
+      switch (billing_frequency.toLowerCase()) {
+        case "weekly":
+          stripeRecurring = { interval: "week", interval_count: 1 };
+          break;
+
+        case "biweekly":
+          stripeRecurring = { interval: "week", interval_count: 2 };
+          break;
+
+        case "monthly":
+          stripeRecurring = { interval: "month", interval_count: 1 };
+          break;
+
+        case "quarterly":
+          stripeRecurring = { interval: "month", interval_count: 3 };
+          break;
+
+        case "per_six_months":
+          stripeRecurring = { interval: "month", interval_count: 6 };
+          break;
+
+        case "annually":
+          stripeRecurring = { interval: "year", interval_count: 1 };
+          break;
+
+        case "per_two_years":
+          stripeRecurring = { interval: "year", interval_count: 2 };
+          break;
+
+        case "per_three_years":
+          stripeRecurring = { interval: "year", interval_count: 3 };
+          break;
+
+        case "per_four_years":
+          stripeRecurring = { interval: "year", interval_count: 4 };
+          break;
+
+        case "per_five_years":
+          stripeRecurring = { interval: "year", interval_count: 5 };
+          break;
+
+        default:
+          console.warn(
+            `⚠️ Unknown billing frequency: ${billing_frequency}. Defaulting to one-time payment.`
+          );
+          stripeRecurring = undefined; // One-time payment
+      }
+    }
 
     const stripe = new Stripe(stripeAccessToken as string, {
       apiVersion: "2023-10-16" as Stripe.LatestApiVersion,
@@ -387,7 +441,7 @@ const createUsageBasedProductPerUnit = async (stripeAccessToken, productData) =>
       currency: currency.toLowerCase(), // Ensure currency is in lowercase
       product: stripeProduct.id,
       recurring: {
-        interval: "month",
+        interval: stripeRecurring?.interval || "month",
         usage_type: "metered",
         meter: stripeMeter.id,
       },
@@ -413,15 +467,69 @@ const createUsageBasedProductPerPackage = async (stripeAccessToken, productData)
   try {
     const { id, properties } = productData || {}; // Default to an empty object if productData is undefined
 
-    const { name, price, sku, description, billing_frequency, createdate, hs_lastmodifieddate, billing_type, usage_model, unit_price, package_price, package_units, tier_mode, tiers_json, currency, stripe_product_id } = properties || {};
+    const { name, price, sku, description, recurringbillingfrequency, createdate, hs_lastmodifieddate, billing_type, usage_model, unit_price, package_price, package_units, tier_mode, tiers_json, currency, stripe_product_id } = properties || {};
 
     if (!name || !price) {
       console.error("❌ Error: Missing required fields (name or price).");
       return;
     }
 
+    const billing_frequency = recurringbillingfrequency;
     // Convert price to cents (Stripe expects amounts in cents)
     const priceInCents = Math.round(parseFloat(package_price) * 100);
+
+    // Determine billing frequency for Stripe pricing
+    let stripeRecurring: Stripe.PriceCreateParams.Recurring | undefined;
+
+    if (billing_frequency && billing_frequency.toLowerCase() != "one_time") {
+      switch (billing_frequency.toLowerCase()) {
+        case "weekly":
+          stripeRecurring = { interval: "week", interval_count: 1 };
+          break;
+
+        case "biweekly":
+          stripeRecurring = { interval: "week", interval_count: 2 };
+          break;
+
+        case "monthly":
+          stripeRecurring = { interval: "month", interval_count: 1 };
+          break;
+
+        case "quarterly":
+          stripeRecurring = { interval: "month", interval_count: 3 };
+          break;
+
+        case "per_six_months":
+          stripeRecurring = { interval: "month", interval_count: 6 };
+          break;
+
+        case "annually":
+          stripeRecurring = { interval: "year", interval_count: 1 };
+          break;
+
+        case "per_two_years":
+          stripeRecurring = { interval: "year", interval_count: 2 };
+          break;
+
+        case "per_three_years":
+          stripeRecurring = { interval: "year", interval_count: 3 };
+          break;
+
+        case "per_four_years":
+          stripeRecurring = { interval: "year", interval_count: 4 };
+          break;
+
+        case "per_five_years":
+          stripeRecurring = { interval: "year", interval_count: 5 };
+          break;
+
+        default:
+          console.warn(
+            `⚠️ Unknown billing frequency: ${billing_frequency}. Defaulting to one-time payment.`
+          );
+          stripeRecurring = undefined; // One-time payment
+      }
+    }
 
     const stripe = new Stripe(stripeAccessToken as string, {
       apiVersion: "2023-10-16" as Stripe.LatestApiVersion,
@@ -459,7 +567,7 @@ const createUsageBasedProductPerPackage = async (stripeAccessToken, productData)
       currency: currency.toLowerCase(), // Ensure currency is in lowercase
       product: stripeProduct.id,
       recurring: {
-        interval: "month",
+        interval: stripeRecurring?.interval || "month",
         usage_type: "metered",
         meter: stripeMeter.id,
       },
@@ -489,15 +597,70 @@ const createUsageBasedProductPerTeir = async (stripeAccessToken, productData) =>
   try {
     const { id, properties } = productData || {}; // Default to an empty object if productData is undefined
 
-    const { name, price, sku, description, billing_frequency, createdate, hs_lastmodifieddate, billing_type, usage_model, unit_price, package_price, package_units, tier_mode, tiers_json, currency, stripe_product_id } = properties || {};
+    const { name, price, sku, description, recurringbillingfrequency, createdate, hs_lastmodifieddate, billing_type, usage_model, unit_price, package_price, package_units, tier_mode, tiers_json, currency, stripe_product_id } = properties || {};
 
     if (!name || !price) {
       console.error("❌ Error: Missing required fields (name or price).");
       return;
     }
 
+    const billing_frequency = recurringbillingfrequency;
     // Convert price to cents (Stripe expects amounts in cents)
     const priceInCents = Math.round(parseFloat(package_price) * 100);
+
+    // Determine billing frequency for Stripe pricing
+    let stripeRecurring: Stripe.PriceCreateParams.Recurring | undefined;
+
+    if (billing_frequency && billing_frequency.toLowerCase() != "one_time") {
+      switch (billing_frequency.toLowerCase()) {
+        case "weekly":
+          stripeRecurring = { interval: "week", interval_count: 1 };
+          break;
+
+        case "biweekly":
+          stripeRecurring = { interval: "week", interval_count: 2 };
+          break;
+
+        case "monthly":
+          stripeRecurring = { interval: "month", interval_count: 1 };
+          break;
+
+        case "quarterly":
+          stripeRecurring = { interval: "month", interval_count: 3 };
+          break;
+
+        case "per_six_months":
+          stripeRecurring = { interval: "month", interval_count: 6 };
+          break;
+
+        case "annually":
+          stripeRecurring = { interval: "year", interval_count: 1 };
+          break;
+
+        case "per_two_years":
+          stripeRecurring = { interval: "year", interval_count: 2 };
+          break;
+
+        case "per_three_years":
+          stripeRecurring = { interval: "year", interval_count: 3 };
+          break;
+
+        case "per_four_years":
+          stripeRecurring = { interval: "year", interval_count: 4 };
+          break;
+
+        case "per_five_years":
+          stripeRecurring = { interval: "year", interval_count: 5 };
+          break;
+
+        default:
+          console.warn(
+            `⚠️ Unknown billing frequency: ${billing_frequency}. Defaulting to one-time payment.`
+          );
+          stripeRecurring = undefined; // One-time payment
+      }
+    }
+
 
     const stripe = new Stripe(stripeAccessToken as string, {
       apiVersion: "2023-10-16" as Stripe.LatestApiVersion,
@@ -1306,7 +1469,7 @@ const fetchStripePriceDetails = async (stripeAccessToken, priceId) => {
     return {
       priceId: price.id,
       productId: price.product,
-      type: price.recurring ? "recurring" : "one_time",
+      type: price.recurring ? price.metadata.pricing_model === "usage_based" ? "usage_based" : "recurring" : "one_time",
       interval: price.recurring?.interval, // ✅ Use this to decide invoice or subscription
       interval_count: price.recurring?.interval_count, // If recurring, store interval
     };
@@ -1601,6 +1764,9 @@ const processStripePayments = async (dealData, stripeAccessToken) => {
       const recurringProducts = products.filter(
         (product) => product.type === "recurring"
       );
+      const usageBasedProducts = products.filter(
+        (product) => product.type === "usage_based"
+      );
 
       // ✅ Process One-Time Products (Invoice)
       if (oneTimeProducts.length > 0) {
@@ -1733,6 +1899,80 @@ const processStripePayments = async (dealData, stripeAccessToken) => {
               `❌ Failed to create subscription with invoice for Customer ${customerId}`
             );
           }
+        }
+      }
+
+      // ✅ Process Usage-Based Products (Metered Billing)
+      if (usageBasedProducts.length > 0) {
+        console.log(
+          `📊 Customer ${customerId} has usage-based products. Creating metered billing...`
+        );
+
+        const subscriptionWithInvoice = await createSubscriptionWithInvoiceUsageBased(
+          customerId,
+          usageBasedProducts,
+          stripeAccessToken,
+          dealId
+        ) as
+          | { subscriptionId: string; subscriptionCreated: number; invoiceId: string | null; invoiceCreated: number | null }
+          | { subscriptionId: string; subscriptionCreated: number; invoiceId: string | null; invoiceCreated: number | null }[];
+
+        if (subscriptionWithInvoice) {
+          console.log(
+            `📩 Subscription with invoice created for Customer ${customerId}`
+          );
+
+          if (!responseData.subscriptions) {
+            responseData.subscriptions = [];
+          }
+          if (!responseData.invoices) {
+            responseData.invoices = [];
+          }
+
+          if (Array.isArray(subscriptionWithInvoice)) {
+            subscriptionWithInvoice.forEach((sub) => {
+              responseData.subscriptions.push({
+                id: sub.subscriptionId,
+                created_at: new Date(sub.subscriptionCreated * 1000).toISOString(), // ✅ Use correct subscription timestamp
+              });
+
+              if (sub.invoiceId && sub.invoiceCreated !== null) {  // ✅ Ensure invoiceCreated is not null
+                responseData.invoices.push({
+                  id: sub.invoiceId,
+                  created_at: new Date(sub.invoiceCreated * 1000).toISOString(), // ✅ Safe conversion
+                });
+              } else if (sub.invoiceId) {
+                responseData.invoices.push({
+                  id: sub.invoiceId,
+                  created_at: "" // ✅ Handle the case where invoiceCreated is null
+                });
+              }
+            });
+          } else {
+            responseData.subscriptions.push({
+              id: subscriptionWithInvoice.subscriptionId,
+              created_at: new Date(subscriptionWithInvoice.subscriptionCreated * 1000).toISOString(), // ✅ Use correct subscription timestamp
+            });
+
+            if (subscriptionWithInvoice.invoiceId && subscriptionWithInvoice.invoiceCreated !== null) {
+              responseData.invoices.push({
+                id: subscriptionWithInvoice.invoiceId,
+                created_at: new Date(subscriptionWithInvoice.invoiceCreated * 1000).toISOString(), // ✅ Safe conversion
+              });
+            } else if (subscriptionWithInvoice.invoiceId) {
+              responseData.invoices.push({
+                id: subscriptionWithInvoice.invoiceId,
+                created_at: "", // ✅ Handle null timestamp gracefully
+              });
+            }
+
+          }
+
+
+        } else {
+          console.error(
+            `❌ Failed to create subscription with invoice for Customer ${customerId}`
+          );
         }
       }
 
@@ -2236,8 +2476,171 @@ const createStripeInvoice = async (
   }
 };
 
+const createStripeUsageBasedSubscription = async (
+  customerId,
+  products,
+  stripeAccessToken,
+  dealId
+) => {
+  try {
+    console.log("inside createStripeUsageBasedSubscription");
+    const stripe = stripeInstance(stripeAccessToken);
 
+    const subscriptionItems = products
+      .filter((product) => product.type === "usage_based")
+      .map((product) => ({
+        price: product.stripePriceId,
+        quantity: product.quantity,
+      }));
 
+    const subscription = await stripe.subscriptions.create({
+      customer: customerId,
+      items: subscriptionItems,
+      expand: ["latest_invoice.payment_intent"],
+      metadata: {
+        // ✅ Add metadata to subscription
+        deal_id: dealId,
+        created_by: "HubSpot Integration",
+      },
+    });
+
+    console.log(
+      `🔄 Usage-Based Subscription created for customer ${customerId}: ${subscription.id}`
+    );
+    return subscription;
+  } catch (error) {
+    console.error(
+      `❌ Error creating usage-based subscription for customer ${customerId}:`,
+      error
+    );
+    return null;
+  }
+}
+
+const createSubscriptionWithInvoiceUsageBased = async (
+  customerId,
+  products,
+  stripeAccessToken,
+  dealId
+) => {
+  try {
+    console.log("inside createSubscriptionWithInvoiceUsageBased");
+    const stripe = stripeInstance(stripeAccessToken);
+
+    const groupedProducts: Record<
+      string,
+      Stripe.SubscriptionCreateParams.Item[]
+    > = products
+      .filter((product) => product.type === "usage_based")
+      .reduce((groups, product) => {
+        const key = `${product.interval}-${product.interval_count}`;
+
+        if (!groups[key]) {
+          groups[key] = [];
+        }
+
+        groups[key].push({
+          price: product.stripePriceId,
+          // quantity: product.quantity || 1,
+        });
+        return groups;
+      }, {} as Record<string, Stripe.SubscriptionCreateParams.Item[]>);
+
+    console.log("🚀 => groupedProducts:", groupedProducts);
+
+    const createdSubscriptions: {
+      subscriptionId: string;
+      subscriptionCreated: number; // ✅ Store subscription created timestamp
+      invoiceId: string | null;
+      invoiceCreated: number | null; // ✅ Store invoice created timestamp
+    }[] = [];
+
+    for (const [interval, subscriptionItems] of Object.entries(
+      groupedProducts
+    )) {
+      console.log(`🔄 Creating subscription for billing interval: ${interval}`);
+
+      const subscription = await stripe.subscriptions.create({
+        customer: customerId,
+        items: subscriptionItems,
+        collection_method: "send_invoice",
+        days_until_due: 7,
+        expand: ["latest_invoice.payment_intent"],
+        metadata: {
+          deal_id: dealId,
+          billing_interval: interval,
+          created_by: "HubSpot Integration",
+        },
+      });
+
+      console.log(
+        `📩 Subscription with invoice created for customer ${customerId}: ${subscription.id}`
+      );
+
+      // ✅ Extract Subscription Created Timestamp
+      const subscriptionCreated = subscription.created;
+
+      // ✅ Extract Invoice ID and Created Timestamp
+      let invoiceId: string | null = null;
+      let invoiceCreated: number | null = null;
+
+      if (typeof subscription.latest_invoice === "string") {
+        invoiceId = subscription.latest_invoice;
+      } else if (
+        subscription.latest_invoice &&
+        "id" in subscription.latest_invoice
+      ) {
+        invoiceId = subscription.latest_invoice.id;
+        invoiceCreated = subscription.latest_invoice.created; // ✅ Get invoice created timestamp
+      }
+
+      // ✅ Add Metadata to Invoice and Finalize
+      if (invoiceId) {
+        console.log(`📩 Updating invoice ${invoiceId} with metadata...`);
+
+        await stripe.invoices.update(invoiceId, {
+          metadata: {
+            deal_id: dealId,
+            subscription_id: subscription.id,
+
+          },
+        });
+
+        // ✅ Finalize the invoice
+        const finalizedInvoice = await stripe.invoices.finalizeInvoice(
+          invoiceId
+        );
+
+        console.log(
+          `📨 Invoice finalized and sent immediately: ${finalizedInvoice.id}`
+        );
+
+        // ✅ Ensure we get the correct created timestamp
+        invoiceCreated = finalizedInvoice.created;
+      } else {
+        console.warn(
+          `⚠️ No invoice found for subscription: ${subscription.id}`
+        );
+      }
+
+      // ✅ Collect Subscription and Invoice Data
+      createdSubscriptions.push({
+        subscriptionId: subscription.id,
+        subscriptionCreated, // ✅ Store Subscription Created Timestamp
+        invoiceId,
+        invoiceCreated, // ✅ Store Invoice Created Timestamp
+      });
+    }
+
+    return createdSubscriptions;
+  } catch (error) {
+    console.error(
+      `❌ Error creating subscription with invoice for customer ${customerId}:`,
+      error
+    );
+    return null;
+  }
+};
 
 const createStripeSubscription = async (
   customerId,
