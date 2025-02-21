@@ -9,7 +9,6 @@
     "lint": "next lint"
   },
   "dependencies": {
-    "antd": "^5.23.2",
     "axios": "^1.7.9",
     "bcrypt": "^5.1.1",
     "dotenv": "^16.4.7",
@@ -26,7 +25,6 @@
     "stripe": "^17.6.0"
   },
   "devDependencies": {
-    "@ant-design/v5-patch-for-react-19": "^1.0.3",
     "@eslint/eslintrc": "^3",
     "@types/node": "^20",
     "@types/react": "^19",
