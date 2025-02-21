@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { getPaymentMethod, updatePaymentMethod } from "../api/hubspot/userHubspotData";
-import { Spin } from "antd";
+// import { Spin } from "antd";
 import { LoadingOutlined } from "@ant-design/icons";
 import Link from "next/link";
 
@@ -80,13 +80,13 @@ const Settings = () => {
 
             {/* Save Button */}
             <button
-                className={`px-6 py-2 text-white font-semibold rounded-lg transition ${(isChanged && !noUser) && !loadingButton ? "bg-blue-600 hover:bg-blue-700" : "bg-gray-400 cursor-not-allowed"
+                className={`flex px-6 py-2 text-white font-semibold rounded-lg transition ${(isChanged && !noUser) && !loadingButton ? "bg-blue-600 hover:bg-blue-700" : "bg-gray-400 cursor-not-allowed"
                     }`}
                 onClick={handleSave}
                 disabled={!isChanged || noUser || loadingButton}
             >
                 Save Settings
-                {loadingButton && <Spin indicator={<LoadingOutlined style={{ fontSize: 16, color: "#FFFFFF" }} spin />} className="ml-2" />}
+                {loadingButton && <div className="ms-3 inline w-6 h-6 border-2 border-solid border-t-transparent rounded-full border-gray-600 animate-spin"></div>}
             </button>
 
             {noUser && (

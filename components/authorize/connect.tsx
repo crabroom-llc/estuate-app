@@ -1,6 +1,6 @@
-import "@ant-design/v5-patch-for-react-19";
+// import "@ant-design/v5-patch-for-react-19";
 import React, { useEffect, useState } from "react";
-import { Button, Spin } from "antd";
+// import { Button, Spin } from "antd";
 import { stripeAccesscode } from "../api/stripe/Oauth/Oauth";
 import { hubspotAccessCode } from "../api/hubspot/Oauth/Oauth";
 // import { hubspotAccessCode } from "../api/hubspot/Oauth/Oauth";
@@ -104,30 +104,25 @@ const Connect = () => {
 
 
       {/* Stripe Connect Button */}
-      <Button
-        type="primary"
-        className={`text-white ${userConnection.isStripeConnected ? "stripe-disabled" : "stripe-enabled"}`}
+      <button
+        className={`flex text-white px-2 py-1 rounded ${userConnection.isStripeConnected ? "stripe-disabled" : "stripe-enabled"}`}
         onClick={handleStripeButton}
         disabled={loading || userConnection.isStripeConnected}
       >
         Connect Stripe
         {loading && (
-          <Spin
-            indicator={<LoadingOutlined style={{ fontSize: 16, color: "#FFFFFF" }} spin />}
-            className="ml-2"
-          />
+          <div className="ms-3 inline w-6 h-6 border-2 border-solid border-t-transparent rounded-full border-gray-600 animate-spin"></div>
         )}
-      </Button>
+      </button>
 
       {/* HubSpot Connect Button */}
-      <Button
-        type="primary"
-        className={`text-white ${userConnection.isHubspotConnected ? "hubspot-disabled" : "hubspot-enabled"}`}
+      <button
+        className={`flex text-white px-2 py-1 rounded ${userConnection.isHubspotConnected ? "hubspot-disabled" : "hubspot-enabled"}`}
         onClick={handleHubSpotButton}
         disabled={hubspotLoading || userConnection.isHubspotConnected}
       >
-        Connect HubSpot {hubspotLoading && <Spin indicator={<LoadingOutlined style={{ fontSize: 16, color: "#FFFFFF" }} spin />} className="ml-2" />}
-      </Button>
+        Connect HubSpot {hubspotLoading && <div className="ms-3 inline w-6 h-6 border-2 border-solid border-t-transparent rounded-full border-gray-600 animate-spin"></div>}
+      </button>
     </div>
   );
 };

@@ -1,7 +1,7 @@
-import '@ant-design/v5-patch-for-react-19';
+// import '@ant-design/v5-patch-for-react-19';
 import React, { useState } from 'react'
 import { login } from '../api/user';
-import { message, Button } from 'antd';
+// import { message, Button } from 'antd';
 import { getCookie, setCookie } from '@/utils/cookies';
 
 const LoginForm = () => {
@@ -33,7 +33,7 @@ const LoginForm = () => {
                 }
             }); // remove token from the response
             setLoading(false);
-            message.success('User logged in successfully', 5);
+            // message.success('User logged in successfully', 5);
             window.location.href = '/dashboard';
         } catch (error) {
             setLoading(false);
@@ -65,14 +65,17 @@ const LoginForm = () => {
                         className='border w-80 h-12 rounded-md px-2'
                         required
                     />
-                    <Button
-                        htmlType='submit'
-                        loading={loading}
-                        iconPosition="end"
-                        className='rounded border border-black bg-white text-black hover:bg-black hover:text-white transition duration-300 py-2'
+                    <button
+                        // htmlType='submit'
+                        // loading={loading}
+                        // iconPosition="end"
+                        className='flex justify-center rounded border border-black bg-white text-black hover:bg-black hover:text-white transition duration-300 py-2'
                     >
                         Login
-                    </Button>
+                        {loading && (
+                            <div className="ms-3 inline w-6 h-6 border-2 border-solid border-t-transparent rounded-full border-gray-600 animate-spin"></div>
+                        )}
+                    </button>
                 </form>
                 <div>
                     <p className='text-center mt-4'>{"Don't have an account ? "}<a href='/signup' className='text-blue-500'>Register</a></p>

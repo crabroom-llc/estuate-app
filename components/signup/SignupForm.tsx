@@ -1,7 +1,7 @@
-import '@ant-design/v5-patch-for-react-19';
+// import '@ant-design/v5-patch-for-react-19';
 import React, { useState } from 'react'
 import { addUser } from '../api/user';
-import { Button, message } from 'antd';
+// import { Button, message } from 'antd';
 
 const SignUpForm = () => {
 
@@ -9,35 +9,35 @@ const SignUpForm = () => {
 
     const handleFormSubmit = async (e: any) => {
         e.preventDefault();
-    
+
         const userObj = {
             firstName: e.target.firstName.value,
             lastName: e.target.lastName.value,
             email: e.target.email.value,
             password: e.target.password.value,
         };
-    
+
         setLoading(true); // Show loading state
-    
+
         try {
             // Attempt to add the user
             const signUpUser = await addUser(userObj);
-    
+
             // Success message
-            message.success('User registered successfully', 5);
-    
+            // message.success('User registered successfully', 5);
+
             // Redirect to login page
             window.location.href = '/login';
         } catch (error: any) {
             // Handle errors gracefully
             console.error('Error registering user:', error);
-            message.error(error.message || 'An error occurred during registration', 5);
+            // message.error(error.message || 'An error occurred during registration', 5);
         } finally {
             // Cleanup logic (e.g., hide loading spinner)
             setLoading(false);
         }
     };
-    
+
 
     return (
         <div className='flex flex-col items-center justify-center h-screen'>
@@ -72,14 +72,15 @@ const SignUpForm = () => {
                         placeholder='Password'
                         className='border w-80 h-12 rounded-md px-2'
                     />
-                    <Button
-                        htmlType='submit'
-                        loading={loading}
-                        iconPosition="end"
-                        className='rounded border border-black bg-white text-black hover:bg-black hover:text-white transition duration-300 py-2'
+                    <button
+                        type='submit'
+                        // loading={loading}
+                        // iconPosition="end"
+                        className='flex justify-center rounded border border-black bg-white text-black hover:bg-black hover:text-white transition duration-300 py-2'
                     >
                         SignUp
-                    </Button>
+                        {loading && <div className="ms-3 inline w-6 h-6 border-2 border-solid border-t-transparent rounded-full border-gray-600 animate-spin"></div>}
+                    </button>
                 </form>
                 <div>
                     <p className='text-center mt-4'>{"Already have an account ? "}<a href='/login' className='text-blue-500'>Login</a></p>

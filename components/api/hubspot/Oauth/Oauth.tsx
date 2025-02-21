@@ -1,5 +1,5 @@
-import "@ant-design/v5-patch-for-react-19";
-import { message } from "antd";
+// import "@ant-design/v5-patch-for-react-19";
+// import { message } from "antd";
 
 import { getCookie, setCookie } from "@/utils/cookies";
 
