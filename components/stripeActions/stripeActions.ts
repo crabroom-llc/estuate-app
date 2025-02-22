@@ -433,6 +433,10 @@ const createUsageBasedProductPerUnit = async (stripeAccessToken, productData) =>
       value_settings: {
         event_payload_key: 'value',
       },
+      customer_mapping: {
+        type: 'by_id',
+        event_payload_key: 'stripe_customer_id',
+      },
     });
 
     // 🔹 Step 2: Create a Per-Unit Usage-Based Price in Stripe
@@ -451,6 +455,7 @@ const createUsageBasedProductPerUnit = async (stripeAccessToken, productData) =>
         usage_type: "per_unit",
         deleted: "false",
         meterId: stripeMeter.id,
+        meterName: `${name}_meter`,
       },
     });
 
@@ -559,6 +564,10 @@ const createUsageBasedProductPerPackage = async (stripeAccessToken, productData)
       value_settings: {
         event_payload_key: 'value',
       },
+      customer_mapping: {
+        type: 'by_id',
+        event_payload_key: 'stripe_customer_id',
+      },
     });
 
     // 🔹 Step 2: Create a Per-Unit Usage-Based Price in Stripe
@@ -581,6 +590,7 @@ const createUsageBasedProductPerPackage = async (stripeAccessToken, productData)
         usage_type: "per_unit",
         deleted: "false",
         meterId: stripeMeter.id,
+        meterName: `${name}_meter`,
       },
     });
 
@@ -690,6 +700,10 @@ const createUsageBasedProductPerTeir = async (stripeAccessToken, productData) =>
       value_settings: {
         event_payload_key: 'value',
       },
+      customer_mapping: {
+        type: 'by_id',
+        event_payload_key: 'stripe_customer_id',
+      },
     });
 
     console.log("JSON coming from HubSpot:", tiers_json);
@@ -731,6 +745,7 @@ const createUsageBasedProductPerTeir = async (stripeAccessToken, productData) =>
         usage_type: "per_unit",
         deleted: "false",
         meterId: stripeMeter.id,
+        meterName: `${name}_meter`,
       },
     });
 
@@ -829,7 +844,7 @@ const updateStripeProduct = async (
           propertyValue
         );
         return stripePriceId;
-      
+
       case "tiers_json":
         console.log(`⏳ Updating Stripe price for product: ${productId}...`);
         stripePriceId = await updateStripeTiers(
@@ -2682,6 +2697,51 @@ const createStripeSubscription = async (
   }
 };
 
+const updateStripeSubscriptionWithUsage = async (
+  subscriptionId,
+  usageQuantity,
+  stripeAccessToken
+) => {
+  try {
+    console.log(`📊 Updating usage for Subscription Item: ${subscriptionId}`);
+
+    const stripe = stripeInstance(stripeAccessToken);
+
+    const subscriptionItem = await stripe.subscriptions.retrieve(subscriptionId);
+    console.log("🚀 => subscriptionItem:", JSON.stringify(subscriptionItem));
+
+    // ✅ Step 1: Check if Subscription Item is valid
+    if (!subscriptionItem) {
+      console.warn(`⚠️ Subscription Item not found: ${subscriptionId}`);
+      return null;
+    }
+
+    const subscriptionItemId = subscriptionItem.items.data[0].id;
+    // remove _meter and add _event in last
+    const meterName = subscriptionItem.items.data[0].price.metadata.meterName.replace("_meter", "_event");
+
+    // ✅ Step 2: Create Usage Record
+    const usageRecord = await stripe.billing.meterEvents.create({
+      event_name: meterName,
+      payload: {
+        value: usageQuantity,
+        stripe_customer_id: subscriptionItem.customer as string,
+      },
+      // subscription_item: subscriptionItemId,
+      // amount: usageQuantity, // Number of units used
+      timestamp: Math.floor(Date.now() / 1000), // Current timestamp
+    });
+
+    console.log(`✅ Usage recorded successfully:`, usageRecord);
+
+    return usageRecord;
+  } catch (error) {
+    console.error(`❌ Error updating usage record:`, error);
+    return null;
+  }
+};
+
+
 // const createSubscriptionWithInvoice = async (
 //   customerId,
 //   products,
@@ -3428,5 +3488,6 @@ export {
   checkPaymentMethod,
   createUsageBasedProductPerUnit,
   createUsageBasedProductPerPackage,
-  createUsageBasedProductPerTeir
+  createUsageBasedProductPerTeir,
+  updateStripeSubscriptionWithUsage
 };

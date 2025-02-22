@@ -4,7 +4,7 @@ import {
   updateHubSpotDeal,fetchdealStripedetailById
 } from "@/components/hubspotActions/hubspotActions";
 // import {processHubspotDealCreated} from "@/components/stripeActions/stripeActions";
-import { processStripePayments } from "@/components/stripeActions/stripeActions";
+import { processStripePayments, updateStripeSubscriptionWithUsage } from "@/components/stripeActions/stripeActions";
 import { hubspotAccessCode } from "@/components/api/hubspot/Oauth/Oauth";
 
 const dealUpdated = async (portalId, objectId, propertyName, propertyValue) => {
@@ -49,6 +49,31 @@ const dealUpdated = async (portalId, objectId, propertyName, propertyValue) => {
         );
       }
       return;
+    } else if (propertyName == "usage_records") {
+
+      // Fetch the deal data
+      const dealData = await fetchDealById(
+        objectId,
+        new_hubspot_access_token,
+        new_stripeAccessToken
+      );
+      console.log(dealData);
+
+      // Update the subscription with the new usage records
+      if (dealData?.properties?.stripe_invoice_id && dealData?.properties?.stripe_subscription_id) {
+        const updateSubscription = await updateStripeSubscriptionWithUsage(
+          dealData?.properties?.stripe_subscription_id,
+          propertyValue,
+          new_stripeAccessToken
+        )
+        console.log("🚀 => updateSubscription:", updateSubscription);
+        if (updateSubscription) {
+          console.log("✅ Usage records updated successfully!");
+        } else {
+          console.error("❌ Error: updateStripeSubscriptionWithUsage returned null. Cannot update HubSpot.");
+        }
+        return;
+      }
     }
     // await fetchdealStripedetailById(objectId, new_hubspot_access_token);
   } catch (error) {}

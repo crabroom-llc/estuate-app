@@ -620,7 +620,7 @@ const fetchDealById = async (
       },
       params: {
         properties:
-          "dealname,amount,dealstage,pipeline,closedate,createdate,hs_lastmodifieddate,dealtype,hs_priority,hubspot_owner_id,associatedcompanyid,associatedcontactid,dealstage",
+          "dealname,amount,dealstage,pipeline,closedate,createdate,hs_lastmodifieddate,dealtype,hs_priority,hubspot_owner_id,associatedcompanyid,associatedcontactid,dealstage,stripe_subscription_id,usage_records,stripe_invoice_id",
         associations: "contacts,companies,line_items",
       },
     });
@@ -1230,6 +1230,10 @@ const processHubspotDealCreated = async (
         type: "recurring",
         customer: stripeCustomerIds,
         products: collectedProducts,
+        properties: {
+          stripe_invoice_id: dealData?.properties?.stripe_invoice_id || null,
+          stripe_subscription_id: dealData?.properties?.stripe_subscription_id || null,
+        }
       };
     }
 
@@ -1239,7 +1243,11 @@ const processHubspotDealCreated = async (
       type: "invoice",
       customer: stripeCustomerIds,
       products: collectedProducts,
-      amount
+      amount,
+      properties: {
+        stripe_invoice_id: dealData?.properties?.stripe_invoice_id || null,
+        stripe_subscription_id: dealData?.properties?.stripe_subscription_id || null,
+      }
     };
   } catch (error) {
     console.error("❌ Error processing HubSpot deal:", error);
@@ -2524,6 +2532,39 @@ const createHubSpotProductPropertyMeterId = async (hubspotAccessToken: string) =
   }
 };
 
+const createHubSpotDealPropertyRecordUsage = async (hubspotAccessToken: string) => {
+  // create a number property to record usage as usage_records
+  try {
+    const response = await axios.post(
+      `https://api.hubapi.com/crm/v3/properties/deals`,
+      {
+        name: "usage_records",
+        label: "Usage Records",
+        type: "number",
+        fieldType: "number",
+        groupName: "dealinformation",
+        description: "Number of units consumed",
+        displayOrder: -1,
+        hasUniqueValue: false,
+        hidden: false,
+        formField: true,
+      },
+      {
+        headers: {
+          Authorization: `Bearer ${hubspotAccessToken}`,
+          "Content-Type": "application/json",
+        },
+      }
+    );
+    console.log("✅ Custom Property `usage_records` Created:", response.data);
+    return response.data;
+  } catch (error: any) {
+    console.error(
+      "❌ Error creating HubSpot deal property:",
+      error.response?.data || error.message
+    );
+  }
+};
 
 const createusuagebasedHubSpotProperties = async (hubspotAccessToken: string) => {
   await createHubSpotProductPropertyBillingType(hubspotAccessToken);
@@ -2535,6 +2576,7 @@ const createusuagebasedHubSpotProperties = async (hubspotAccessToken: string) =>
   await createHubSpotProductPropertyTiersJson(hubspotAccessToken);
   await createHubSpotProductPropertyCurrency(hubspotAccessToken);
   await createHubSpotProductPropertyMeterId(hubspotAccessToken);
+  await createHubSpotDealPropertyRecordUsage(hubspotAccessToken);
 };
 
 
