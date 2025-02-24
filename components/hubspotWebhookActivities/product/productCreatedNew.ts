@@ -5,9 +5,9 @@ import {
 } from "@/components/hubspotActions/hubspotActions";
 import { createProduct, createUsageBasedProductPerPackage, createUsageBasedProductPerTeir, createUsageBasedProductPerUnit } from "@/components/stripeActions/stripeActions";
 
-const productCreated = async (portalId, object) => {
+const productCreated = async (portalId, object, query) => {
     try {
-        const tokens = await getTokens(portalId);
+        const tokens = await getTokens(portalId, query);
 
         if (!tokens) {
             console.error("❌ Failed to retrieve access tokens.");

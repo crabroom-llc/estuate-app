@@ -4,9 +4,9 @@ import { fetchProductById, updateHubSpotProduct } from "@/components/hubspotActi
 import { updateStripeProduct } from "@/components/stripeActions/stripeActions";
 import { productCreated } from "./productCreatedNew";
 
-const productUpdated = async (portalId, objectId, propertyName, propertyValue) => {
+const productUpdated = async (portalId, objectId, propertyName, propertyValue, query) => {
   try {
-    const tokens = await getTokens(portalId);
+    const tokens = await getTokens(portalId, query);
 
     if (!tokens) {
       console.error("❌ Failed to retrieve access tokens.");
@@ -27,7 +27,7 @@ const productUpdated = async (portalId, objectId, propertyName, propertyValue) =
         console.log("No currency found");
         return;
       } else {
-        await productCreated(portalId, stripe_product_id);
+        await productCreated(portalId, stripe_product_id, query);
         return;
       }
     }

@@ -118,7 +118,7 @@ export async function POST(request: NextRequest) {
     }
 
     // 🚀 Process the webhook asynchronously
-    processWebhookEvents(parsedBody);
+    processWebhookEvents(parsedBody, pool.query.bind(pool));
 
     return response;
   } catch (error: any) {
@@ -174,7 +174,7 @@ function validateSignatureV3(
   return timingSafeEqual(Buffer.from(expectedHmac), Buffer.from(signature));
 }
 
-async function processWebhookEvents(parsedBody: any) {
+async function processWebhookEvents(parsedBody: any, query:(sql: string, params?: any[]) => Promise<any>) {
   try {
     if (!parsedBody || parsedBody.length === 0) {
       console.warn("⚠️ No webhook events to process.");
@@ -213,7 +213,7 @@ async function processWebhookEvents(parsedBody: any) {
     }
 
     // ✅ Validate Portal ID in DB
-    const [rows]: any[] = await pool.query(`SELECT 1 FROM user_oauth WHERE hubspot_acc = ? LIMIT 1`, [portalId]);
+    const [rows]: any[] = await query(`SELECT 1 FROM user_oauth WHERE hubspot_acc = ? LIMIT 1`, [portalId]);
 
     if (!rows || rows.length === 0) {
       console.error(
@@ -273,25 +273,25 @@ async function processWebhookEvents(parsedBody: any) {
         switch (subscriptionType) {
           case "contact.creation":
             console.log("✅ Contact Created Event Detected!");
-            await contactCreated(portalId, objectId);
+            await contactCreated(portalId, objectId, query);
             processedObjects.add(objectId);
             break;
 
           case "product.creation":
             console.log("✅ Product Created Event Detected!");
-            await productCreated(portalId, objectId);
+            await productCreated(portalId, objectId, query);
             processedObjects.add(objectId);
             break;
 
           case "deal.creation":
             console.log("✅ Deal Created Event Detected!");
-            await dealCreated(portalId, objectId);
+            await dealCreated(portalId, objectId, query);
             processedObjects.add(objectId);
             break;
 
           case "company.creation":
             console.log("✅ Company Created Event Detected!");
-            await companyCreated(portalId, objectId);
+            await companyCreated(portalId, objectId, query);
             processedObjects.add(objectId);
             break;
 
@@ -307,7 +307,8 @@ async function processWebhookEvents(parsedBody: any) {
               portalId,
               objectId,
               propertyName,
-              propertyValue
+              propertyValue,
+              query
             );
             break;
 
@@ -323,7 +324,8 @@ async function processWebhookEvents(parsedBody: any) {
               portalId,
               objectId,
               propertyName,
-              propertyValue
+              propertyValue,
+              query
             );
             processedEvents.add(subscriptionType);
             break;
@@ -336,7 +338,7 @@ async function processWebhookEvents(parsedBody: any) {
               continue;
             }
             console.log("✏️ Deal Property Changed Event Detected!");
-            await dealUpdated(portalId, objectId, propertyName, propertyValue);
+            await dealUpdated(portalId, objectId, propertyName, propertyValue, query);
             break;
 
           case "company.propertyChange":
@@ -351,7 +353,8 @@ async function processWebhookEvents(parsedBody: any) {
               portalId,
               objectId,
               propertyName,
-              propertyValue
+              propertyValue,
+              query
             );
             break;
 
@@ -363,7 +366,7 @@ async function processWebhookEvents(parsedBody: any) {
               continue;
             }
             console.log("🗑️ Contact Deleted Event Detected!");
-            await contactDeleted(portalId, objectId);
+            await contactDeleted(portalId, objectId, query);
             break;
 
           case "product.deletion":
@@ -374,7 +377,7 @@ async function processWebhookEvents(parsedBody: any) {
               continue;
             }
             console.log("🗑️ Product Deleted Event Detected!");
-            await productDeleted(portalId, objectId);
+            await productDeleted(portalId, objectId, query);
             break;
 
           case "company.deletion":
@@ -385,7 +388,7 @@ async function processWebhookEvents(parsedBody: any) {
               continue;
             }
             console.log("🗑️ Company Deleted Event Detected!");
-            await companyDeleted(portalId, objectId);
+            await companyDeleted(portalId, objectId, query);
             break;
 
           default:
@@ -404,26 +407,4 @@ async function processWebhookEvents(parsedBody: any) {
   }
 }
 
-// 🔄 Function to forward webhook event to the external URL
-async function forwardWebhookEvent(eventData: any) {
-  try {
-    const ngrokURL =
-      "https://e21f-49-205-245-106.ngrok-free.app/api/webhook/hubspot";
 
-    const response = await fetch(ngrokURL, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: eventData,
-    });
-
-    if (!response.ok) {
-      console.error("❌ Failed to forward webhook event:", response.statusText);
-    } else {
-      console.log("✅ Webhook event successfully forwarded");
-    }
-  } catch (error) {
-    console.error("❌ Error forwarding webhook event:", error);
-  }
-}

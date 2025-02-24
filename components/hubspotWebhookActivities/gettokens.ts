@@ -5,14 +5,14 @@ import { gethubspotaccesstokenWebhook } from "@/components/api/hubspot/Oauth/get
 
 
 
-const getTokens = async (portalId: any) => {
+const getTokens = async (portalId: any, query:(sql: string, params?: any[]) => Promise<any>) => {
   let connection;
 
   try {
-    connection = await pool.getConnection();
+    // connection = await pool.getConnection();
 
     // 🔹 Step 1: Retrieve Tokens from Database
-    const [rows]: any[] = await connection.query(
+    const [rows]: any[] = await query(
       `SELECT 
               usd.stripe_refresh_token, 
               usd.stripe_access_token, 
@@ -30,7 +30,7 @@ const getTokens = async (portalId: any) => {
       return null; // Return null instead of silent failure
     }
 
-    let {
+    const {
       stripe_refresh_token,
       hubspot_refresh_token,
       hubspot_access_token,
@@ -47,7 +47,7 @@ const getTokens = async (portalId: any) => {
     console.log(`🔹 Retrieved HubSpot Access Token: ${hubspot_access_token || "None (Will Refresh)"}`);
 
     // 🔹 Step 2: Refresh HubSpot Access Token
-    let new_hubspot_access_token = await gethubspotaccesstokenWebhook(
+    const new_hubspot_access_token = await gethubspotaccesstokenWebhook(
       hubspot_refresh_token,
       hubspot_access_token
     );
@@ -77,14 +77,14 @@ const getTokens = async (portalId: any) => {
   }
 };
 
-const getStripeTokens = async (portalId: any) => {
+const getStripeTokens = async (portalId: any, query:(sql: string, params?: any[]) => Promise<any>) => {
   let connection;
 
   try {
-    connection = await pool.getConnection();
+    // connection = await pool.getConnection();
 
     // 🔹 Step 1: Retrieve Tokens from Database
-    const [rows]: any[] = await connection.query(
+    const [rows]: any[] = await query(
       `SELECT 
               usd.stripe_refresh_token, 
               usd.stripe_access_token, 
@@ -102,7 +102,7 @@ const getStripeTokens = async (portalId: any) => {
       return null; // Return null instead of silent failure
     }
 
-    let {
+ const {
       stripe_refresh_token,
       hubspot_refresh_token,
       hubspot_access_token,
@@ -119,7 +119,7 @@ const getStripeTokens = async (portalId: any) => {
     console.log(`🔹 Retrieved HubSpot Access Token: ${hubspot_access_token || "None (Will Refresh)"}`);
 
     // 🔹 Step 2: Refresh HubSpot Access Token
-    let new_hubspot_access_token = await gethubspotaccesstokenWebhook(
+    const new_hubspot_access_token = await gethubspotaccesstokenWebhook(
       hubspot_refresh_token,
       hubspot_access_token
     );

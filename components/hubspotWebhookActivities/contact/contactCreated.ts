@@ -4,9 +4,9 @@ import {
 } from "@/components/hubspotActions/hubspotActions";
 import { createStripeCustomer } from "@/components/stripeActions/stripeActions";
 import { getTokens } from "@/components/hubspotWebhookActivities/gettokens";
-const contactCreated = async (portalId: any, objectId: any) => {
+const contactCreated = async (portalId: any, objectId: any, query:(sql: string, params?: any[]) => Promise<any>) => {
   try {
-    const tokens = await getTokens(portalId);
+    const tokens = await getTokens(portalId, query);
 
     if (!tokens) {
       console.error("❌ Failed to retrieve access tokens.");

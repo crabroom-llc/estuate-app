@@ -78,7 +78,7 @@ export async function POST(request: NextRequest) {
         }
 
         // 🚀 Process the webhook asynchronously
-        processWebhookEvents(event);
+        processWebhookEvents(event, pool.query.bind(pool));
 
         return response;
     } catch (error: any) {
@@ -89,7 +89,7 @@ export async function POST(request: NextRequest) {
 
 
 // 🔄 Background processing function
-async function processWebhookEvents(event: any) {
+async function processWebhookEvents(event: any, query:(sql: string, params?: any[]) => Promise<any>) {
     try {
         // ✅ Check if webhook events exist
         if (!event || event.length === 0) {
@@ -104,7 +104,7 @@ async function processWebhookEvents(event: any) {
         }
 
         // ✅ Fetch Portal ID from DB to validate
-        const [rows]: any[] = await pool.query(
+        const [rows]: any[] = await query(
             `SELECT stripe_acc FROM user_oauth WHERE stripe_acc = ?`,
             [accountId]
         );
@@ -134,20 +134,20 @@ async function processWebhookEvents(event: any) {
             switch (subscriptionType) {
                 case "invoice.paid":
                     console.log("✅ Invoice Paid Event Detected!");
-                    await invoicePaid(accountId, objectId);
+                    await invoicePaid(accountId, objectId, query);
                     break;
                 case "invoice.created":
                     console.log("✅ Invoice Paid Event Detected!");
-                    await invoiceCreated(accountId, objectId);
+                    await invoiceCreated(accountId, objectId, query);
                     break;
 
                 case "customer.updated":
                     console.log("✏️ Update Event Detected!");
                     if (event.data.object.metadata.deleted == "false") {
                         if (event.data.object.metadata.hubspot_contact_id !== undefined) {
-                            await customerUpdate(event.data, accountId, objectId);
+                            await customerUpdate(event.data, accountId, objectId, query);
                         } else if (event.data.object.metadata.hubspot_company_id !== undefined) {
-                            await companyUpdate(event.data, accountId, objectId);
+                            await companyUpdate(event.data, accountId, objectId, query);
                         }
                     }
                     break;
@@ -155,7 +155,7 @@ async function processWebhookEvents(event: any) {
                 case "product.updated":
                     console.log("✏️ Product Update Event Detected!");
                     if (event.data.object.metadata.deleted == "false") {
-                        await productUpdate(event.data, accountId, objectId);
+                        await productUpdate(event.data, accountId, objectId, query);
                     }
                     break;
 

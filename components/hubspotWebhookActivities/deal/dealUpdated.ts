@@ -7,8 +7,8 @@ import {
 import { processStripePayments, updateStripeSubscriptionWithUsage } from "@/components/stripeActions/stripeActions";
 import { hubspotAccessCode } from "@/components/api/hubspot/Oauth/Oauth";
 
-const dealUpdated = async (portalId, objectId, propertyName, propertyValue) => {
-  const tokens = await getTokens(portalId);
+const dealUpdated = async (portalId, objectId, propertyName, propertyValue, query) => {
+  const tokens = await getTokens(portalId, query);
   if (!tokens) {
     console.error("❌ Failed to retrieve access tokens.");
     return;

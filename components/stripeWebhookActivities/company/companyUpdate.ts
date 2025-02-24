@@ -1,8 +1,8 @@
 import { updateHubSpotCompanyFromStripe } from "@/components/hubspotActions/hubspotActions";
 import { getStripeTokens } from "@/components/hubspotWebhookActivities/gettokens";
-const companyUpdate = async (data: any, accountId: any, objectId: any) => {
+const companyUpdate = async (data: any, accountId: any, objectId: any, query:(sql: string, params?: any[]) => Promise<any>) => {
     try {
-        const tokens = await getStripeTokens(accountId);
+        const tokens = await getStripeTokens(accountId, query);
 
         if (!tokens) {
             console.error("❌ Failed to retrieve access tokens.");

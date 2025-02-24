@@ -2261,9 +2261,7 @@ const createHubSpotProductPropertyUsageModel = async (hubspotAccessToken: string
         fieldType: "select",
         groupName: "productinformation",
         options: [
-          { label: "Per Unit", value: "per_unit" },
           { label: "Per Package", value: "per_package" },
-          { label: "Per Tier", value: "per_tier" },
         ],
         description: "Defines how the usage is billed",
         displayOrder: -1,

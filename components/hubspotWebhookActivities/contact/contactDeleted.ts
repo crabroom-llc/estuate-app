@@ -1,11 +1,11 @@
 import { getTokens } from "@/components/hubspotWebhookActivities/gettokens";
 import { deleteStripeCustomer, getCustomerStripeId } from "@/components/stripeActions/stripeActions";
 
-const contactDeleted = async (portalId, objectId) => {
+const contactDeleted = async (portalId, objectId, query) => {
   let connection;
 
   try {
-    const tokens = await getTokens(portalId);
+    const tokens = await getTokens(portalId, query);
 
     if (!tokens) {
       console.error("❌ Failed to retrieve access tokens.");

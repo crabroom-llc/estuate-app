@@ -4,10 +4,10 @@ import { fetchDealById, updateHubSpotDeal } from "@/components/hubspotActions/hu
 import {processStripePayments} from "@/components/stripeActions/stripeActions";
 
 
-const dealCreated = async (portalId, objectId) => {
+const dealCreated = async (portalId, objectId, query) => {
     try {
         
-        const tokens = await getTokens(portalId);
+        const tokens = await getTokens(portalId, query);
 
         if (!tokens) {
             console.error("❌ Failed to retrieve access tokens.");

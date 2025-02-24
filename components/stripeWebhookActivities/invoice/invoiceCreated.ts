@@ -4,9 +4,9 @@ import {
 import { checkPaymentMethod, fetchStripeInvoice } from "@/components/stripeActions/stripeActions";
 import { getStripeTokens } from "@/components/hubspotWebhookActivities/gettokens";
 import fs from 'fs';
-const invoiceCreated = async (portalId: any, objectId: any) => {
+const invoiceCreated = async (portalId: any, objectId: any, query:(sql: string, params?: any[]) => Promise<any>) => {
     try {
-        const tokens = await getStripeTokens(portalId);
+        const tokens = await getStripeTokens(portalId, query);
 
         if (!tokens) {
             console.error("❌ Failed to retrieve access tokens.");

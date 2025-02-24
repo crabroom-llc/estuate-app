@@ -6,12 +6,13 @@ const companyUpdated = async (
   portalId,
   objectId,
   propertyName,
-  propertyValue
+  propertyValue,
+  query
 ) => {
   // console.log(portalId, propertyName, propertyValue);
   let connection;
   try {
-    const tokens = await getTokens(portalId);
+    const tokens = await getTokens(portalId, query);
 
     if (!tokens) {
       console.error("❌ Failed to retrieve access tokens.");

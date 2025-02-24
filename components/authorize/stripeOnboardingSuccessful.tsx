@@ -5,9 +5,19 @@ import { generateAccessCode } from "../api/stripe/Oauth/Oauth";
 import { useSearchParams } from "next/navigation";
 import { getCookie, setCookie } from '@/utils/cookies';
 import Link from "next/link";
+import { Suspense } from "react";
 
 
-const OnboardingSuccessful = () => {
+const  OnboardingSuccessful = () => {
+  return (
+    <Suspense fallback={<div>Loading...</div>}>
+      <HubSpotOnboardingContent />
+    </Suspense>
+  );
+}
+
+
+const HubSpotOnboardingContent = () => {
   const [generateAccessCodeStatus, setGenerateAccessCodeStatus] = useState(false);
   const [screenLoading, setScreenLoading] = useState(true);
   const searchParams = useSearchParams();
