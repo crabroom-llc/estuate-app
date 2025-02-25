@@ -97,14 +97,25 @@ const productCreated = async (portalId, object, query) => {
                 } else {
                     const stripeProductResponse = await createUsageBasedProductPerPackage(new_stripeAccessToken, object);
                     console.log("🚀 => stripeProductResponse:", stripeProductResponse);
-                    if (!stripeProductResponse) {
-                        console.error("❌ Failed to create usage-based product in Stripe.");
+                    if (!stripeProductResponse || !stripeProductResponse.priceId  || !stripeProductResponse.productId) {
+                        console.error("❌ Failed to create usage-based product or priceId is undefined.");
                         return;
-                    }
-                    const stripeProductId = stripeProductResponse.productId;
-                    const stripePriceId = stripeProductResponse.priceId;
-                    const stripeMeteredId = stripeProductResponse.meterId;
+                      }
+                      let stripeOverageId;
+             
 
+                    const stripeProductId = stripeProductResponse.productId ??"";
+                    let stripePriceId = stripeProductResponse.priceId ?? "";
+                      
+                    if(!stripeProductResponse.overagePriceId){
+                        stripeOverageId = "";
+                    }
+                    else{
+                        stripeOverageId = stripeProductResponse.overagePriceId;
+                        stripePriceId = stripeOverageId+","+stripePriceId
+                    }
+                    const stripeMeteredId = stripeProductResponse.meterId;
+                    
                     const updatedProduct = await updateHubSpotProduct(
                         object.id,
                         stripeProductId,

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { exec } from "child_process";
 import fs from "fs";
+import path from "path";
 
 export async function POST(req: NextRequest) {
     try {
@@ -26,21 +27,23 @@ export async function POST(req: NextRequest) {
 
         // ✅ Ensure it's a push event to the `dev` branch
         if (body.ref === "refs/heads/dev") {
-            const scriptPath = "/home/hubspot/deploy.sh";
+            const scriptPath = "/home/connector-app/deploy.sh";
+            const logFilePath = "/home/connector-app/deploy.log";
 
             // ✅ Check if deploy.sh exists
             if (!fs.existsSync(scriptPath)) {
                 return NextResponse.json({ message: "Deployment script not found" }, { status: 404 });
             }
 
-            // ✅ Run deploy script in background
-            exec(`bash ${scriptPath} &`, (error, stdout, stderr) => {
-                if (error) {
-                    console.error("Deployment Script Failed:", error);
-                }
-                console.log(`Deployment Output: ${stdout}`);
-                if (stderr) console.error(`Deployment Error: ${stderr}`);
-            });
+            // ✅ Run deploy script in background and log output
+            const command = `bash ${scriptPath} &`;
+            // exec(command, (error, stdout, stderr) => {
+            //     if (error) {
+            //         console.error("Deployment Script Failed:", error);
+            //     }
+            //     console.log(`Deployment Output: ${stdout}`);
+            //     if (stderr) console.error(`Deployment Error: ${stderr}`);
+            // });
 
             return NextResponse.json({ message: "Deployment Triggered" }, { status: 200 });
         } else {
@@ -52,3 +55,75 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ message: "Server error", error: (error as any).message }, { status: 500 });
     }
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

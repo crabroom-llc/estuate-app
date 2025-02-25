@@ -233,7 +233,7 @@ const fetchProductById = async (
       },
       params: {
         properties:
-          "name,price,sku,description,billing_frequency,createdate,recurringbillingfrequency,hs_lastmodifieddate,billing_type,usage_model,unit_price,package_price,package_units,tier_mode,tiers_json,currency,stripe_product_id",
+          "name,price,sku,description,billing_frequency,createdate,recurringbillingfrequency,hs_lastmodifieddate,billing_type,usage_model,unit_price,package_price,package_units,tier_mode,tiers_json,currency,stripe_product_id, overage_value",
       },
     });
 
@@ -662,6 +662,7 @@ const fetchDealById = async (
       console.log("✅ Final Processed Deal Data:", result);
       return result;
     }
+    
   } catch (error: any) {
     console.error(
       "❌ Error fetching deal details:",
@@ -1198,29 +1199,56 @@ const processHubspotDealCreated = async (
         const stripePriceId =
           productDetails.properties?.stripe_price_id || null;
 
+        // if (stripeProductId && stripePriceId) {
+        //   // ✅ Fetch Stripe Price Details to determine type (recurring or one-time)
+        //   const stripePriceDetails = await fetchStripePriceDetails(
+        //     stripeaccesstoken,
+        //     stripePriceId
+        //   );
+
+        //   if (stripePriceDetails) {
+        //     collectedProducts.push({
+        //       stripeProductId,
+        //       stripePriceId,
+        //       type: stripePriceDetails.type, // ✅ "recurring" or "one_time"
+        //       interval: stripePriceDetails.interval || "null", // ✅ Fetch interval
+        //       interval_count: Number(stripePriceDetails.interval_count), // ✅ Fetch interval count
+        //       quantity: quantity,
+        //     });
+
+        //     if (stripePriceDetails.type === "recurring") {
+        //       hasRecurringItem = true;
+        //     }
+        //   }
+        // }
+
+
         if (stripeProductId && stripePriceId) {
-          // ✅ Fetch Stripe Price Details to determine type (recurring or one-time)
-          const stripePriceDetails = await fetchStripePriceDetails(
-            stripeaccesstoken,
-            stripePriceId
-          );
-
-          if (stripePriceDetails) {
-            collectedProducts.push({
-              stripeProductId,
-              stripePriceId,
-              type: stripePriceDetails.type, // ✅ "recurring" or "one_time"
-              interval: stripePriceDetails.interval || "null", // ✅ Fetch interval
-              interval_count: Number(stripePriceDetails.interval_count), // ✅ Fetch interval count
-              quantity: quantity,
-            });
-
-            if (stripePriceDetails.type === "recurring") {
-              hasRecurringItem = true;
+          const priceIds = stripePriceId.includes(",") ? stripePriceId.split(",") : [stripePriceId];
+        
+          for (const priceId of priceIds) {
+            // ✅ Fetch Stripe Price Details for each priceId
+            const stripePriceDetails = await fetchStripePriceDetails(stripeaccesstoken, priceId.trim());
+        
+            if (stripePriceDetails) {
+              collectedProducts.push({
+                stripeProductId,
+                stripePriceId: priceId.trim(),
+                type: stripePriceDetails.type, // ✅ "recurring" or "one_time"
+                interval: stripePriceDetails.interval || "null", // ✅ Fetch interval
+                interval_count: Number(stripePriceDetails.interval_count), // ✅ Fetch interval count
+                quantity: quantity,
+              });
+        
+              if (stripePriceDetails.type === "recurring") {
+                hasRecurringItem = true;
+              }
             }
           }
         }
+        
       }
+
     }
 
     // ✅ **CASE 2A: Recurring Products Found (Subscription)**
@@ -2261,7 +2289,7 @@ const createHubSpotProductPropertyUsageModel = async (hubspotAccessToken: string
         fieldType: "select",
         groupName: "productinformation",
         options: [
-          { label: "Per Package", value: "per_package" },
+          { label: "Per Unit", value: "per_unit" },
         ],
         description: "Defines how the usage is billed",
         displayOrder: -1,

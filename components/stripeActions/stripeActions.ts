@@ -16,8 +16,9 @@ const createStripeCustomer = async (contact, stripeAccessToken, contactId) => {
     });
 
     const customer = await stripe.customers.create({
-      name: `${contact.properties?.firstname || ""} ${contact.properties?.lastname || ""
-        }`.trim(),
+      name: `${contact.properties?.firstname || ""} ${
+        contact.properties?.lastname || ""
+      }`.trim(),
       email: contact.properties.email || "",
       phone: contact.properties.phone || "",
       metadata: {
@@ -337,17 +338,42 @@ const createProduct = async (stripeAccessToken, productData) => {
   }
 };
 
-const createUsageBasedProductPerUnit = async (stripeAccessToken, productData) => {
+const createUsageBasedProductPerUnit = async (
+  stripeAccessToken,
+  productData
+) => {
   try {
     const { id, properties } = productData || {}; // Default to an empty object if productData is undefined
 
-    const { name, price, sku, description, recurringbillingfrequency, createdate, hs_lastmodifieddate, billing_type, usage_model, unit_price, package_price, package_units, tier_mode, tiers_json, currency, stripe_product_id } = properties || {};
+    const {
+      name,
+      price,
+      sku,
+      description,
+      recurringbillingfrequency,
+      createdate,
+      hs_lastmodifieddate,
+      billing_type,
+      usage_model,
+      unit_price,
+      package_price,
+      package_units,
+      tier_mode,
+      tiers_json,
+      currency,
+      stripe_product_id,
+    } = properties || {};
 
     if (!name || !price) {
       console.error("❌ Error: Missing required fields (name or price).");
       return;
     }
 
+    if(stripe_product_id){
+
+      console.log("Product already exists in stripe");
+      return; 
+    }
     const billing_frequency = recurringbillingfrequency;
     // Convert price to cents (Stripe expects amounts in cents)
     const priceInCents = Math.round(parseFloat(unit_price) * 100);
@@ -428,14 +454,14 @@ const createUsageBasedProductPerUnit = async (stripeAccessToken, productData) =>
       display_name: `${name}_meter`,
       event_name: `${name}_event`,
       default_aggregation: {
-        formula: 'sum',
+        formula: "sum",
       },
       value_settings: {
-        event_payload_key: 'value',
+        event_payload_key: "value",
       },
       customer_mapping: {
-        type: 'by_id',
-        event_payload_key: 'stripe_customer_id',
+        type: "by_id",
+        event_payload_key: "stripe_customer_id",
       },
     });
 
@@ -462,17 +488,42 @@ const createUsageBasedProductPerUnit = async (stripeAccessToken, productData) =>
     console.log("✅ Stripe Usage-Based Product Created:", stripeProduct.id);
     console.log("✅ Stripe Per-Unit Price Created:", stripePrice.id);
 
-    return { productId: stripeProduct.id, priceId: stripePrice.id, meterId: stripeMeter.id };
+    return {
+      productId: stripeProduct.id,
+      priceId: stripePrice.id,
+      meterId: stripeMeter.id,
+    };
   } catch (error) {
     console.error("❌ Error creating usage-based product:", error);
   }
 };
 
-const createUsageBasedProductPerPackage = async (stripeAccessToken, productData) => {
+const createUsageBasedProductPerPackage = async (
+  stripeAccessToken,
+  productData
+) => {
   try {
     const { id, properties } = productData || {}; // Default to an empty object if productData is undefined
 
-    const { name, price, sku, description, recurringbillingfrequency, createdate, hs_lastmodifieddate, billing_type, usage_model, unit_price, package_price, package_units, tier_mode, tiers_json, currency, stripe_product_id } = properties || {};
+    const {
+      name,
+      price,
+      sku,
+      description,
+      recurringbillingfrequency,
+      createdate,
+      hs_lastmodifieddate,
+      billing_type,
+      usage_model,
+      unit_price,
+      package_price,
+      package_units,
+      overage_value,
+      tier_mode,
+      tiers_json,
+      currency,
+      stripe_product_id,
+    } = properties || {};
 
     if (!name || !price) {
       console.error("❌ Error: Missing required fields (name or price).");
@@ -485,6 +536,45 @@ const createUsageBasedProductPerPackage = async (stripeAccessToken, productData)
 
     // Determine billing frequency for Stripe pricing
     let stripeRecurring: Stripe.PriceCreateParams.Recurring | undefined;
+    // Convert prices to cents (Stripe expects amounts in cents)
+    const packagePriceInCents = Math.round(parseFloat(package_price) * 100);
+    const overagePriceInCents = overage_value
+      ? Math.round(parseFloat(overage_value) * 100)
+      : null;
+
+    const stripe = new Stripe(stripeAccessToken as string, {
+      apiVersion: "2023-10-16" as Stripe.LatestApiVersion,
+    });
+
+    // 🔹 Step 1: Create the Product in Stripe
+    const stripeProduct = await stripe.products.create({
+      name,
+      description,
+      metadata: {
+        hubspot_product_id: id,
+        hubspot_sku: sku || "N/A",
+        hubspot_created_at: createdate || "N/A",
+        hubspot_last_modified: hs_lastmodifieddate || "N/A",
+        pricing_model: billing_type,
+        usage_type: usage_model,
+        deleted: "false",
+      },
+    });
+
+    const stripeMeter = await stripe.billing.meters.create({
+      display_name: `${name}_meter`,
+      event_name: `${name}_event`,
+      default_aggregation: {
+        formula: "sum",
+      },
+      value_settings: {
+        event_payload_key: "value",
+      },
+      customer_mapping: {
+        type: "by_id",
+        event_payload_key: "stripe_customer_id",
+      },
+    });
 
     if (billing_frequency && billing_frequency.toLowerCase() != "one_time") {
       switch (billing_frequency.toLowerCase()) {
@@ -536,43 +626,24 @@ const createUsageBasedProductPerPackage = async (stripeAccessToken, productData)
       }
     }
 
-    const stripe = new Stripe(stripeAccessToken as string, {
-      apiVersion: "2023-10-16" as Stripe.LatestApiVersion,
-    });
-
-    // 🔹 Step 1: Create the Product in Stripe
-    const stripeProduct = await stripe.products.create({
-      name,
-      description,
-      metadata: {
-        hubspot_product_id: id,
-        hubspot_sku: sku || "N/A",
-        hubspot_created_at: createdate || "N/A",
-        hubspot_last_modified: hs_lastmodifieddate || "N/A",
-        pricing_model: billing_type,
-        usage_type: usage_model,
-        deleted: "false",
-      },
-    });
-
-    const stripeMeter = await stripe.billing.meters.create({
-      display_name: `${name}_meter`,
-      event_name: `${name}_event`,
-      default_aggregation: {
-        formula: 'sum',
-      },
-      value_settings: {
-        event_payload_key: 'value',
-      },
-      customer_mapping: {
-        type: 'by_id',
-        event_payload_key: 'stripe_customer_id',
-      },
-    });
+    if (overage_value) {
+      const overagePriceInCents = Math.round(parseFloat(overage_value) * 100);
+      // 🔹 Step 4: Create Price in Stripe (Recurring or One-time)
+      const stripePrice = await stripe.prices.create({
+        unit_amount: priceInCents,
+        currency: "usd", // Modify as needed
+        product: stripeProduct.id,
+        recurring: stripeRecurring || undefined, // If null, it will be one-time
+        metadata: {
+          deleted: "false",
+        },
+      });
+      const priceId = stripePrice?.id;
+      const productId = stripeProduct?.id;
 
     // 🔹 Step 2: Create a Per-Unit Usage-Based Price in Stripe
-    const stripePrice = await stripe.prices.create({
-      unit_amount: priceInCents,
+    const overagePrice = await stripe.prices.create({
+      unit_amount: overagePriceInCents,
       currency: currency.toLowerCase(), // Ensure currency is in lowercase
       product: stripeProduct.id,
       recurring: {
@@ -581,10 +652,6 @@ const createUsageBasedProductPerPackage = async (stripeAccessToken, productData)
         meter: stripeMeter.id,
       },
       billing_scheme: "per_unit",
-      transform_quantity: {
-        divide_by: package_units,
-        round: "up"
-      },
       metadata: {
         pricing_model: "usage_based",
         usage_type: "per_unit",
@@ -594,20 +661,82 @@ const createUsageBasedProductPerPackage = async (stripeAccessToken, productData)
       },
     });
 
-    console.log("✅ Stripe Usage-Based Product Created:", stripeProduct.id);
-    console.log("✅ Stripe Per-Unit Price Created:", stripePrice.id);
+      console.log("✅ Stripe Subscription Product Created:", productId);
+      console.log("✅ Stripe Subscription Price Created:", priceId);
+      console.log("✅ Stripe Overage Product Created:", productId);
+      console.log("✅ Stripe Overage Price Created:", overagePrice.id);
 
-    return { productId: stripeProduct.id, priceId: stripePrice.id, meterId: stripeMeter.id };
+      return {
+        productId: productId,
+        priceId: priceId,
+        overagePriceId: overagePrice.id,
+        meterId: stripeMeter.id,
+      };
+    } else {
+      // 🔹 Step 2: Create a Per-Unit Usage-Based Price in Stripe
+      const stripePrice = await stripe.prices.create({
+        unit_amount: priceInCents,
+        currency: currency.toLowerCase(), // Ensure currency is in lowercase
+        product: stripeProduct.id,
+        recurring: {
+          interval: stripeRecurring?.interval || "month",
+          usage_type: "metered",
+          meter: stripeMeter.id,
+        },
+        billing_scheme: "per_unit",
+        transform_quantity: {
+          divide_by: package_units,
+          round: "up",
+        },
+        metadata: {
+          pricing_model: "usage_based",
+          usage_type: "per_unit",
+          deleted: "false",
+          meterId: stripeMeter.id,
+          meterName: `${name}_meter`,
+        },
+      });
+
+      console.log("✅ Stripe Usage-Based Product Created:", stripeProduct.id);
+      console.log("✅ Stripe Per-Unit Price Created:", stripePrice.id);
+
+      return {
+        productId: stripeProduct.id,
+        priceId: stripePrice.id,
+        overagePriceId: null,
+        meterId: stripeMeter.id,
+      };
+    }
   } catch (error) {
     console.error("❌ Error creating usage-based product:", error);
   }
 };
 
-const createUsageBasedProductPerTeir = async (stripeAccessToken, productData) => {
+const createUsageBasedProductPerTeir = async (
+  stripeAccessToken,
+  productData
+) => {
   try {
     const { id, properties } = productData || {}; // Default to an empty object if productData is undefined
 
-    const { name, price, sku, description, recurringbillingfrequency, createdate, hs_lastmodifieddate, billing_type, usage_model, unit_price, package_price, package_units, tier_mode, tiers_json, currency, stripe_product_id } = properties || {};
+    const {
+      name,
+      price,
+      sku,
+      description,
+      recurringbillingfrequency,
+      createdate,
+      hs_lastmodifieddate,
+      billing_type,
+      usage_model,
+      unit_price,
+      package_price,
+      package_units,
+      tier_mode,
+      tiers_json,
+      currency,
+      stripe_product_id,
+    } = properties || {};
 
     if (!name || !price) {
       console.error("❌ Error: Missing required fields (name or price).");
@@ -671,7 +800,6 @@ const createUsageBasedProductPerTeir = async (stripeAccessToken, productData) =>
       }
     }
 
-
     const stripe = new Stripe(stripeAccessToken as string, {
       apiVersion: "2023-10-16" as Stripe.LatestApiVersion,
     });
@@ -695,14 +823,14 @@ const createUsageBasedProductPerTeir = async (stripeAccessToken, productData) =>
       display_name: `${name}_meter`,
       event_name: `${name}_event`,
       default_aggregation: {
-        formula: 'sum',
+        formula: "sum",
       },
       value_settings: {
-        event_payload_key: 'value',
+        event_payload_key: "value",
       },
       customer_mapping: {
-        type: 'by_id',
-        event_payload_key: 'stripe_customer_id',
+        type: "by_id",
+        event_payload_key: "stripe_customer_id",
       },
     });
 
@@ -725,7 +853,6 @@ const createUsageBasedProductPerTeir = async (stripeAccessToken, productData) =>
     }));
 
     console.log("✅ Formatted tiers:", formattedTiers);
-
 
     // 🔹 Step 2: Create a Per-Unit Usage-Based Price in Stripe
     const stripePrice = await stripe.prices.create({
@@ -752,7 +879,11 @@ const createUsageBasedProductPerTeir = async (stripeAccessToken, productData) =>
     console.log("✅ Stripe Usage-Based Product Created:", stripeProduct.id);
     console.log("✅ Stripe Per-Unit Price Created:", stripePrice.id);
 
-    return { productId: stripeProduct.id, priceId: stripePrice.id, meterId: stripeMeter.id };
+    return {
+      productId: stripeProduct.id,
+      priceId: stripePrice.id,
+      meterId: stripeMeter.id,
+    };
   } catch (error) {
     console.error("❌ Error creating usage-based product:", error);
   }
@@ -778,7 +909,8 @@ const updateStripeProduct = async (
 
     // Initialize update object
     const updateData: Stripe.ProductUpdateParams = {};
-    const metadataUpdate: Record<string, string> = existingProduct.metadata || {};
+    const metadataUpdate: Record<string, string> =
+      existingProduct.metadata || {};
     let stripePriceId = null as any;
     // 🔹 Handle Standard Stripe Fields
     switch (propertyName) {
@@ -989,12 +1121,12 @@ const updateStripePricamount = async (
       product: productId,
       recurring: oldPrice.recurring
         ? {
-          interval: oldPrice.recurring.interval,
-          interval_count: oldPrice.recurring.interval_count ?? 1, // Default to 1
-          usage_type: oldPrice.recurring.usage_type ?? "licensed", // Default value
-          aggregate_usage: oldPrice.recurring.aggregate_usage ?? undefined, // Optional
-          meter: oldPrice.recurring.meter ?? undefined, // Optional
-        }
+            interval: oldPrice.recurring.interval,
+            interval_count: oldPrice.recurring.interval_count ?? 1, // Default to 1
+            usage_type: oldPrice.recurring.usage_type ?? "licensed", // Default value
+            aggregate_usage: oldPrice.recurring.aggregate_usage ?? undefined, // Optional
+            meter: oldPrice.recurring.meter ?? undefined, // Optional
+          }
         : undefined, // Fix: Ensure correct type
 
       metadata: oldPrice.metadata ?? {}, // Copy metadata
@@ -1049,7 +1181,7 @@ const updateStripeCurrency = async (
     const prices = await stripe.prices.list({
       product: productId,
       active: true,
-      expand: ['data.tiers']
+      expand: ["data.tiers"],
     });
 
     if (prices.data.length === 0) {
@@ -1057,7 +1189,6 @@ const updateStripeCurrency = async (
         `⚠️ No active price found for product ${productId}. Creating a new one.`
       );
     }
-
 
     // Use the most recent active price as a reference
     const oldPrice = prices.data[0] ?? {};
@@ -1071,12 +1202,12 @@ const updateStripeCurrency = async (
       product: productId,
       recurring: oldPrice.recurring
         ? {
-          interval: oldPrice.recurring.interval,
-          interval_count: oldPrice.recurring.interval_count ?? 1, // Default to 1
-          usage_type: oldPrice.recurring.usage_type ?? "licensed", // Default value
-          aggregate_usage: oldPrice.recurring.aggregate_usage ?? undefined, // Optional
-          meter: oldPrice.recurring.meter ?? undefined, // Optional
-        }
+            interval: oldPrice.recurring.interval,
+            interval_count: oldPrice.recurring.interval_count ?? 1, // Default to 1
+            usage_type: oldPrice.recurring.usage_type ?? "licensed", // Default value
+            aggregate_usage: oldPrice.recurring.aggregate_usage ?? undefined, // Optional
+            meter: oldPrice.recurring.meter ?? undefined, // Optional
+          }
         : undefined, // Fix: Ensure correct type
 
       metadata: oldPrice.metadata ?? {}, // Copy metadata
@@ -1085,9 +1216,9 @@ const updateStripeCurrency = async (
       tiers_mode: oldPrice.tiers_mode ?? undefined, // Fix
       tiers: oldPrice.tiers?.map((tier: any) => {
         return {
-          up_to: tier.up_to ?? 'inf',
+          up_to: tier.up_to ?? "inf",
           unit_amount: tier.unit_amount,
-        }
+        };
       }) as Stripe.PriceCreateParams.Tier[], // Fix
       transform_quantity: oldPrice.transform_quantity ?? undefined, // Fix
       nickname: oldPrice.nickname ?? undefined, // Fix
@@ -1137,7 +1268,7 @@ const updateStripeTierMode = async (
     const prices = await stripe.prices.list({
       product: productId,
       active: true,
-      expand: ['data.tiers']
+      expand: ["data.tiers"],
     });
 
     if (prices.data.length === 0) {
@@ -1145,7 +1276,6 @@ const updateStripeTierMode = async (
         `⚠️ No active price found for product ${productId}. Creating a new one.`
       );
     }
-
 
     // Use the most recent active price as a reference
     const oldPrice = prices.data[0] ?? {};
@@ -1159,23 +1289,23 @@ const updateStripeTierMode = async (
       product: productId,
       recurring: oldPrice.recurring
         ? {
-          interval: oldPrice.recurring.interval,
-          interval_count: oldPrice.recurring.interval_count ?? 1, // Default to 1
-          usage_type: oldPrice.recurring.usage_type ?? "licensed", // Default value
-          aggregate_usage: oldPrice.recurring.aggregate_usage ?? undefined, // Optional
-          meter: oldPrice.recurring.meter ?? undefined, // Optional
-        }
+            interval: oldPrice.recurring.interval,
+            interval_count: oldPrice.recurring.interval_count ?? 1, // Default to 1
+            usage_type: oldPrice.recurring.usage_type ?? "licensed", // Default value
+            aggregate_usage: oldPrice.recurring.aggregate_usage ?? undefined, // Optional
+            meter: oldPrice.recurring.meter ?? undefined, // Optional
+          }
         : undefined, // Fix: Ensure correct type
 
       metadata: oldPrice.metadata ?? {}, // Copy metadata
       tax_behavior: oldPrice.tax_behavior ?? "unspecified", // Copy tax behavior
       billing_scheme: oldPrice.billing_scheme ?? "per_unit", // Copy billing scheme
-      tiers_mode: tierMode as Stripe.PriceCreateParams.TiersMode || undefined, // Fix
+      tiers_mode: (tierMode as Stripe.PriceCreateParams.TiersMode) || undefined, // Fix
       tiers: oldPrice.tiers?.map((tier: any) => {
         return {
-          up_to: tier.up_to ?? 'inf',
+          up_to: tier.up_to ?? "inf",
           unit_amount: tier.unit_amount,
-        }
+        };
       }) as Stripe.PriceCreateParams.Tier[], // Fix
       transform_quantity: oldPrice.transform_quantity ?? undefined, // Fix
       nickname: oldPrice.nickname ?? undefined, // Fix
@@ -1225,7 +1355,7 @@ const updateStripeTiers = async (
     const prices = await stripe.prices.list({
       product: productId,
       active: true,
-      expand: ['data.tiers']
+      expand: ["data.tiers"],
     });
 
     if (prices.data.length === 0) {
@@ -1260,12 +1390,12 @@ const updateStripeTiers = async (
       product: productId,
       recurring: oldPrice.recurring
         ? {
-          interval: oldPrice.recurring.interval,
-          interval_count: oldPrice.recurring.interval_count ?? 1, // Default to 1
-          usage_type: oldPrice.recurring.usage_type ?? "licensed", // Default value
-          aggregate_usage: oldPrice.recurring.aggregate_usage ?? undefined, // Optional
-          meter: oldPrice.recurring.meter ?? undefined, // Optional
-        }
+            interval: oldPrice.recurring.interval,
+            interval_count: oldPrice.recurring.interval_count ?? 1, // Default to 1
+            usage_type: oldPrice.recurring.usage_type ?? "licensed", // Default value
+            aggregate_usage: oldPrice.recurring.aggregate_usage ?? undefined, // Optional
+            meter: oldPrice.recurring.meter ?? undefined, // Optional
+          }
         : undefined, // Fix: Ensure correct type
 
       metadata: oldPrice.metadata ?? {}, // Copy metadata
@@ -1343,12 +1473,12 @@ const updateStripePackagePrice = async (
       product: productId,
       recurring: oldPrice.recurring
         ? {
-          interval: oldPrice.recurring.interval,
-          interval_count: oldPrice.recurring.interval_count ?? 1, // Default to 1
-          usage_type: oldPrice.recurring.usage_type ?? "licensed", // Default value
-          aggregate_usage: oldPrice.recurring.aggregate_usage ?? undefined, // Optional
-          meter: oldPrice.recurring.meter ?? undefined, // Optional
-        }
+            interval: oldPrice.recurring.interval,
+            interval_count: oldPrice.recurring.interval_count ?? 1, // Default to 1
+            usage_type: oldPrice.recurring.usage_type ?? "licensed", // Default value
+            aggregate_usage: oldPrice.recurring.aggregate_usage ?? undefined, // Optional
+            meter: oldPrice.recurring.meter ?? undefined, // Optional
+          }
         : undefined, // Fix: Ensure correct type
 
       metadata: oldPrice.metadata ?? {}, // Copy metadata
@@ -1424,12 +1554,12 @@ const updateStripePackageUnits = async (
       product: productId,
       recurring: oldPrice.recurring
         ? {
-          interval: oldPrice.recurring.interval,
-          interval_count: oldPrice.recurring.interval_count ?? 1, // Default to 1
-          usage_type: oldPrice.recurring.usage_type ?? "licensed", // Default value
-          aggregate_usage: oldPrice.recurring.aggregate_usage ?? undefined, // Optional
-          meter: oldPrice.recurring.meter ?? undefined, // Optional
-        }
+            interval: oldPrice.recurring.interval,
+            interval_count: oldPrice.recurring.interval_count ?? 1, // Default to 1
+            usage_type: oldPrice.recurring.usage_type ?? "licensed", // Default value
+            aggregate_usage: oldPrice.recurring.aggregate_usage ?? undefined, // Optional
+            meter: oldPrice.recurring.meter ?? undefined, // Optional
+          }
         : undefined, // Fix: Ensure correct type
 
       metadata: oldPrice.metadata ?? {}, // Copy metadata
@@ -1438,7 +1568,7 @@ const updateStripePackageUnits = async (
       tiers_mode: oldPrice.tiers_mode ?? undefined, // Fix
       transform_quantity: {
         divide_by: packageUnits,
-        round: "up"
+        round: "up",
       },
       nickname: oldPrice.nickname ?? undefined, // Fix
     };
@@ -1471,7 +1601,7 @@ const updateStripePackageUnits = async (
     console.error("❌ Error updating Stripe price:", error);
     return null;
   }
-}
+};
 
 const fetchStripePriceDetails = async (stripeAccessToken, priceId) => {
   try {
@@ -1484,7 +1614,11 @@ const fetchStripePriceDetails = async (stripeAccessToken, priceId) => {
     return {
       priceId: price.id,
       productId: price.product,
-      type: price.recurring ? price.metadata.pricing_model === "usage_based" ? "usage_based" : "recurring" : "one_time",
+      type: price.recurring
+        ? price.metadata.pricing_model === "usage_based"
+          ? "usage_based"
+          : "recurring"
+        : "one_time",
       interval: price.recurring?.interval, // ✅ Use this to decide invoice or subscription
       interval_count: price.recurring?.interval_count, // If recurring, store interval
     };
@@ -1493,6 +1627,9 @@ const fetchStripePriceDetails = async (stripeAccessToken, priceId) => {
     return null;
   }
 };
+
+
+
 
 // const processStripePayments = async (dealData, stripeAccessToken) => {
 //   try {
@@ -1721,310 +1858,352 @@ const fetchStripePriceDetails = async (stripeAccessToken, priceId) => {
 //   }
 // };
 
-const processStripePayments = async (dealData, stripeAccessToken) => {
-  try {
-    console.log(
-      "🔹 Processing Stripe Payments:",
-      JSON.stringify(dealData, null, 2)
-    );
+//main
+// const processStripePayments = async (dealData, stripeAccessToken) => {
+//   try {
+//     console.log(
+//       "🔹 Processing Stripe Payments:",
+//       JSON.stringify(dealData, null, 2)
+//     );
 
-    const { dealId, customer, products, amount } = dealData;
+//     const { dealId, customer, products, amount } = dealData;
 
-    // ✅ Explicitly define responseData with correct types
-    const responseData: {
-      dealId: string;
-      invoices: { id: string; created_at: string }[];
-      subscriptions: { id: string; created_at: string }[];
-      amount: number;
-    } = {
-      dealId: dealId,
-      invoices: [],
-      subscriptions: [],
-      amount: amount,
-    };
+//     // ✅ Explicitly define responseData with correct types
+//     const responseData: {
+//       dealId: string;
+//       invoices: { id: string; created_at: string }[];
+//       subscriptions: { id: string; created_at: string }[];
+//       amount: number;
+//     } = {
+//       dealId: dealId,
+//       invoices: [],
+//       subscriptions: [],
+//       amount: amount,
+//     };
 
-    for (const customerId of customer) {
-      console.log(`✅ Processing for Customer: ${customerId}`);
+//     for (const customerId of customer) {
+//       console.log(`✅ Processing for Customer: ${customerId}`);
 
-      if (!products) {
-        console.log(
-          `📩 No Stripe products found for ${customerId}. Creating a manual invoice for ${amount}...`
-        );
-        const manualInvoice = await createManualInvoice(
-          customerId,
-          amount,
-          stripeAccessToken,
-          dealId
-        );
-        if (manualInvoice) {
-          console.log(
-            `📩 Manual invoice created for Customer ${customerId}: ${manualInvoice.id}`
-          );
-          responseData.invoices.push({
-            id: manualInvoice.id,
-            created_at: new Date(manualInvoice.created * 1000).toISOString(),
-          }); // ✅ Collect Manual Invoice ID
-          return responseData;
-        } else {
-          console.error(
-            `❌ Failed to create manual invoice for Customer ${customerId}`
-          );
-        }
-      }
+//       if (!products) {
+//         console.log(
+//           `📩 No Stripe products found for ${customerId}. Creating a manual invoice for ${amount}...`
+//         );
+//         const manualInvoice = await createManualInvoice(
+//           customerId,
+//           amount,
+//           stripeAccessToken,
+//           dealId
+//         );
+//         if (manualInvoice) {
+//           console.log(
+//             `📩 Manual invoice created for Customer ${customerId}: ${manualInvoice.id}`
+//           );
+//           responseData.invoices.push({
+//             id: manualInvoice.id,
+//             created_at: new Date(manualInvoice.created * 1000).toISOString(),
+//           }); // ✅ Collect Manual Invoice ID
+//           return responseData;
+//         } else {
+//           console.error(
+//             `❌ Failed to create manual invoice for Customer ${customerId}`
+//           );
+//         }
+//       }
 
-      // ✅ Separate one-time and recurring products
-      const oneTimeProducts = products.filter(
-        (product) => product.type === "one_time"
-      );
-      const recurringProducts = products.filter(
-        (product) => product.type === "recurring"
-      );
-      const usageBasedProducts = products.filter(
-        (product) => product.type === "usage_based"
-      );
+//       // ✅ Separate one-time and recurring products
+//       const oneTimeProducts = products.filter(
+//         (product) => product.type === "one_time"
+//       );
+//       const recurringProducts = products.filter(
+//         (product) => product.type === "recurring"
+//       );
+//       const usageBasedProducts = products.filter(
+//         (product) => product.type === "usage_based"
+//       );
+//       console.log("usageBasedProducts are here: "+JSON.stringify(usageBasedProducts));
+//       // ✅ Process One-Time Products (Invoice)
+//       if (oneTimeProducts.length > 0) {
+//         console.log(
+//           `💰 Customer ${customerId} has one-time products. Creating invoice...`
+//         );
+//         const invoice = await createStripeInvoice(
+//           customerId,
+//           oneTimeProducts,
+//           stripeAccessToken,
+//           dealId
+//         );
+//         if (invoice) {
+//           console.log(
+//             `📩 Invoice created for Customer ${customerId}: ${invoice.id}`
+//           );
+//           responseData.invoices.push({
+//             id: invoice.id,
+//             created_at: new Date(invoice.created * 1000).toISOString(),
+//           });
+//         } else {
+//           console.error(
+//             `❌ Failed to create invoice for Customer ${customerId}`
+//           );
+//         }
+//       }
 
-      // ✅ Process One-Time Products (Invoice)
-      if (oneTimeProducts.length > 0) {
-        console.log(
-          `💰 Customer ${customerId} has one-time products. Creating invoice...`
-        );
-        const invoice = await createStripeInvoice(
-          customerId,
-          oneTimeProducts,
-          stripeAccessToken,
-          dealId
-        );
-        if (invoice) {
-          console.log(
-            `📩 Invoice created for Customer ${customerId}: ${invoice.id}`
-          );
-          responseData.invoices.push({
-            id: invoice.id,
-            created_at: new Date(invoice.created * 1000).toISOString(),
-          });
-        } else {
-          console.error(
-            `❌ Failed to create invoice for Customer ${customerId}`
-          );
-        }
-      }
+//       // ✅ Process Recurring Products (Subscription)
+//       if (recurringProducts.length > 0) {
+//         console.log(
+//           `🔄 Customer ${customerId} has recurring products. Checking payment method...`
+//         );
 
-      // ✅ Process Recurring Products (Subscription)
-      if (recurringProducts.length > 0) {
-        console.log(
-          `🔄 Customer ${customerId} has recurring products. Checking payment method...`
-        );
+//         const hasPayment = await hasPaymentMethod(
+//           customerId,
+//           stripeAccessToken
+//         );
+//         if (hasPayment) {
+//           // ✅ Customer has a payment method → Create subscription
+//           console.log(
+//             `✅ Customer ${customerId} has a payment method. Creating subscription...`
+//           );
+//           const subscription = await createStripeSubscription(
+//             customerId,
+//             recurringProducts,
+//             stripeAccessToken,
+//             dealId
+//           );
+//           if (subscription) {
+//             console.log(
+//               `🔄 Subscription created for Customer ${customerId}: ${subscription.id}`
+//             );
+//             responseData.subscriptions.push({
+//               id: subscription.id,
+//               created_at: new Date(subscription.created * 1000).toISOString(),
+//             });
+//           } else {
+//             console.error(
+//               `❌ Failed to create subscription for Customer ${customerId}`
+//             );
+//           }
+//         } else {
+//           console.log(
+//             `📩 No payment method found for ${customerId}. Creating subscription with invoice.`
+//           );
+//           const subscriptionWithInvoice = (await createSubscriptionWithInvoice(
+//             customerId,
+//             recurringProducts,
+//             stripeAccessToken,
+//             dealId
+//           )) as
+//             | {
+//                 subscriptionId: string;
+//                 subscriptionCreated: number;
+//                 invoiceId: string | null;
+//                 invoiceCreated: number | null;
+//               }
+//             | {
+//                 subscriptionId: string;
+//                 subscriptionCreated: number;
+//                 invoiceId: string | null;
+//                 invoiceCreated: number | null;
+//               }[];
 
-        const hasPayment = await hasPaymentMethod(
-          customerId,
-          stripeAccessToken
-        );
-        if (hasPayment) {
-          // ✅ Customer has a payment method → Create subscription
-          console.log(
-            `✅ Customer ${customerId} has a payment method. Creating subscription...`
-          );
-          const subscription = await createStripeSubscription(
-            customerId,
-            recurringProducts,
-            stripeAccessToken,
-            dealId
-          );
-          if (subscription) {
-            console.log(
-              `🔄 Subscription created for Customer ${customerId}: ${subscription.id}`
-            );
-            responseData.subscriptions.push({
-              id: subscription.id,
-              created_at: new Date(subscription.created * 1000).toISOString(),
-            });
-          } else {
-            console.error(
-              `❌ Failed to create subscription for Customer ${customerId}`
-            );
-          }
-        } else {
-          console.log(
-            `📩 No payment method found for ${customerId}. Creating subscription with invoice.`
-          );
-          const subscriptionWithInvoice = (await createSubscriptionWithInvoice(
-            customerId,
-            recurringProducts,
-            stripeAccessToken,
-            dealId
-          )) as
-            | { subscriptionId: string; subscriptionCreated: number; invoiceId: string | null; invoiceCreated: number | null }
-            | { subscriptionId: string; subscriptionCreated: number; invoiceId: string | null; invoiceCreated: number | null }[];
+//           if (subscriptionWithInvoice) {
+//             console.log(
+//               `📩 Subscription with invoice created for Customer ${customerId}`
+//             );
+
+//             if (!responseData.subscriptions) {
+//               responseData.subscriptions = [];
+//             }
+//             if (!responseData.invoices) {
+//               responseData.invoices = [];
+//             }
+
+//             if (Array.isArray(subscriptionWithInvoice)) {
+//               subscriptionWithInvoice.forEach((sub) => {
+//                 responseData.subscriptions.push({
+//                   id: sub.subscriptionId,
+//                   created_at: new Date(
+//                     sub.subscriptionCreated * 1000
+//                   ).toISOString(), // ✅ Use correct subscription timestamp
+//                 });
+
+//                 if (sub.invoiceId && sub.invoiceCreated !== null) {
+//                   // ✅ Ensure invoiceCreated is not null
+//                   responseData.invoices.push({
+//                     id: sub.invoiceId,
+//                     created_at: new Date(
+//                       sub.invoiceCreated * 1000
+//                     ).toISOString(), // ✅ Safe conversion
+//                   });
+//                 } else if (sub.invoiceId) {
+//                   responseData.invoices.push({
+//                     id: sub.invoiceId,
+//                     created_at: "", // ✅ Handle the case where invoiceCreated is null
+//                   });
+//                 }
+//               });
+//             } else {
+//               responseData.subscriptions.push({
+//                 id: subscriptionWithInvoice.subscriptionId,
+//                 created_at: new Date(
+//                   subscriptionWithInvoice.subscriptionCreated * 1000
+//                 ).toISOString(), // ✅ Use correct subscription timestamp
+//               });
+
+//               if (
+//                 subscriptionWithInvoice.invoiceId &&
+//                 subscriptionWithInvoice.invoiceCreated !== null
+//               ) {
+//                 responseData.invoices.push({
+//                   id: subscriptionWithInvoice.invoiceId,
+//                   created_at: new Date(
+//                     subscriptionWithInvoice.invoiceCreated * 1000
+//                   ).toISOString(), // ✅ Safe conversion
+//                 });
+//               } else if (subscriptionWithInvoice.invoiceId) {
+//                 responseData.invoices.push({
+//                   id: subscriptionWithInvoice.invoiceId,
+//                   created_at: "", // ✅ Handle null timestamp gracefully
+//                 });
+//               }
+//             }
+//           } else {
+//             console.error(
+//               `❌ Failed to create subscription with invoice for Customer ${customerId}`
+//             );
+//           }
+//         }
+//       }
+
+//       // ✅ Process Usage-Based Products (Metered Billing)
+//       if (usageBasedProducts.length > 0) {
+//         console.log(
+//           `📊 Customer ${customerId} has usage-based products. Creating metered billing...`
+//         );
+
+//         const subscriptionWithInvoice =
+//           (await createSubscriptionWithInvoiceUsageBased(
+//             customerId,
+//             usageBasedProducts,
+//             stripeAccessToken,
+//             dealId
+//           )) as
+//             | {
+//                 subscriptionId: string;
+//                 subscriptionCreated: number;
+//                 invoiceId: string | null;
+//                 invoiceCreated: number | null;
+//               }
+//             | {
+//                 subscriptionId: string;
+//                 subscriptionCreated: number;
+//                 invoiceId: string | null;
+//                 invoiceCreated: number | null;
+//               }[];
+
+//         if (subscriptionWithInvoice) {
+//           console.log(
+//             `📩 Subscription with invoice created for Customer ${customerId}`
+//           );
+
+//           if (!responseData.subscriptions) {
+//             responseData.subscriptions = [];
+//           }
+//           if (!responseData.invoices) {
+//             responseData.invoices = [];
+//           }
+
+//           if (Array.isArray(subscriptionWithInvoice)) {
+//             subscriptionWithInvoice.forEach((sub) => {
+//               responseData.subscriptions.push({
+//                 id: sub.subscriptionId,
+//                 created_at: new Date(
+//                   sub.subscriptionCreated * 1000
+//                 ).toISOString(), // ✅ Use correct subscription timestamp
+//               });
+
+//               if (sub.invoiceId && sub.invoiceCreated !== null) {
+//                 // ✅ Ensure invoiceCreated is not null
+//                 responseData.invoices.push({
+//                   id: sub.invoiceId,
+//                   created_at: new Date(sub.invoiceCreated * 1000).toISOString(), // ✅ Safe conversion
+//                 });
+//               } else if (sub.invoiceId) {
+//                 responseData.invoices.push({
+//                   id: sub.invoiceId,
+//                   created_at: "", // ✅ Handle the case where invoiceCreated is null
+//                 });
+//               }
+//             });
+//           } else {
+//             responseData.subscriptions.push({
+//               id: subscriptionWithInvoice.subscriptionId,
+//               created_at: new Date(
+//                 subscriptionWithInvoice.subscriptionCreated * 1000
+//               ).toISOString(), // ✅ Use correct subscription timestamp
+//             });
+
+//             if (
+//               subscriptionWithInvoice.invoiceId &&
+//               subscriptionWithInvoice.invoiceCreated !== null
+//             ) {
+//               responseData.invoices.push({
+//                 id: subscriptionWithInvoice.invoiceId,
+//                 created_at: new Date(
+//                   subscriptionWithInvoice.invoiceCreated * 1000
+//                 ).toISOString(), // ✅ Safe conversion
+//               });
+//             } else if (subscriptionWithInvoice.invoiceId) {
+//               responseData.invoices.push({
+//                 id: subscriptionWithInvoice.invoiceId,
+//                 created_at: "", // ✅ Handle null timestamp gracefully
+//               });
+//             }
+//           }
+//         } else {
+//           console.error(
+//             `❌ Failed to create subscription with invoice for Customer ${customerId}`
+//           );
+//         }
+//       }
+
+//       // ✅ Handle Case Where No Stripe Products Exist
+//       if (products.length == 0) {
+//         console.log(
+//           `📩 No Stripe products found for ${customerId}. Creating a manual invoice for ${amount}...`
+//         );
+//         const manualInvoice = await createManualInvoice(
+//           customerId,
+//           amount,
+//           stripeAccessToken,
+//           dealId
+//         );
+//         if (manualInvoice) {
+//           console.log(
+//             `📩 Manual invoice created for Customer ${customerId}: ${manualInvoice.id}`
+//           );
+//           responseData.invoices.push({
+//             id: manualInvoice.id,
+//             created_at: new Date().toISOString(), // ✅ Store UTC time
+//           });
+//         } else {
+//           console.error(
+//             `❌ Failed to create manual invoice for Customer ${customerId}`
+//           );
+//         }
+//       }
+//     }
+
+//     // ✅ Return all collected invoice and subscription IDs
+//     return responseData;
+//   } catch (error) {
+//     console.error("❌ Error processing Stripe payments:", error);
+//     return null;
+//   }
+// };
 
 
-          if (subscriptionWithInvoice) {
-            console.log(
-              `📩 Subscription with invoice created for Customer ${customerId}`
-            );
-
-            if (!responseData.subscriptions) {
-              responseData.subscriptions = [];
-            }
-            if (!responseData.invoices) {
-              responseData.invoices = [];
-            }
-
-            if (Array.isArray(subscriptionWithInvoice)) {
-              subscriptionWithInvoice.forEach((sub) => {
-                responseData.subscriptions.push({
-                  id: sub.subscriptionId,
-                  created_at: new Date(sub.subscriptionCreated * 1000).toISOString(), // ✅ Use correct subscription timestamp
-                });
-
-                if (sub.invoiceId && sub.invoiceCreated !== null) {  // ✅ Ensure invoiceCreated is not null
-                  responseData.invoices.push({
-                    id: sub.invoiceId,
-                    created_at: new Date(sub.invoiceCreated * 1000).toISOString(), // ✅ Safe conversion
-                  });
-                } else if (sub.invoiceId) {
-                  responseData.invoices.push({
-                    id: sub.invoiceId,
-                    created_at: "" // ✅ Handle the case where invoiceCreated is null
-                  });
-                }
-              });
-            } else {
-              responseData.subscriptions.push({
-                id: subscriptionWithInvoice.subscriptionId,
-                created_at: new Date(subscriptionWithInvoice.subscriptionCreated * 1000).toISOString(), // ✅ Use correct subscription timestamp
-              });
-
-              if (subscriptionWithInvoice.invoiceId && subscriptionWithInvoice.invoiceCreated !== null) {
-                responseData.invoices.push({
-                  id: subscriptionWithInvoice.invoiceId,
-                  created_at: new Date(subscriptionWithInvoice.invoiceCreated * 1000).toISOString(), // ✅ Safe conversion
-                });
-              } else if (subscriptionWithInvoice.invoiceId) {
-                responseData.invoices.push({
-                  id: subscriptionWithInvoice.invoiceId,
-                  created_at: "", // ✅ Handle null timestamp gracefully
-                });
-              }
-
-            }
 
 
-          } else {
-            console.error(
-              `❌ Failed to create subscription with invoice for Customer ${customerId}`
-            );
-          }
-        }
-      }
 
-      // ✅ Process Usage-Based Products (Metered Billing)
-      if (usageBasedProducts.length > 0) {
-        console.log(
-          `📊 Customer ${customerId} has usage-based products. Creating metered billing...`
-        );
-
-        const subscriptionWithInvoice = await createSubscriptionWithInvoiceUsageBased(
-          customerId,
-          usageBasedProducts,
-          stripeAccessToken,
-          dealId
-        ) as
-          | { subscriptionId: string; subscriptionCreated: number; invoiceId: string | null; invoiceCreated: number | null }
-          | { subscriptionId: string; subscriptionCreated: number; invoiceId: string | null; invoiceCreated: number | null }[];
-
-        if (subscriptionWithInvoice) {
-          console.log(
-            `📩 Subscription with invoice created for Customer ${customerId}`
-          );
-
-          if (!responseData.subscriptions) {
-            responseData.subscriptions = [];
-          }
-          if (!responseData.invoices) {
-            responseData.invoices = [];
-          }
-
-          if (Array.isArray(subscriptionWithInvoice)) {
-            subscriptionWithInvoice.forEach((sub) => {
-              responseData.subscriptions.push({
-                id: sub.subscriptionId,
-                created_at: new Date(sub.subscriptionCreated * 1000).toISOString(), // ✅ Use correct subscription timestamp
-              });
-
-              if (sub.invoiceId && sub.invoiceCreated !== null) {  // ✅ Ensure invoiceCreated is not null
-                responseData.invoices.push({
-                  id: sub.invoiceId,
-                  created_at: new Date(sub.invoiceCreated * 1000).toISOString(), // ✅ Safe conversion
-                });
-              } else if (sub.invoiceId) {
-                responseData.invoices.push({
-                  id: sub.invoiceId,
-                  created_at: "" // ✅ Handle the case where invoiceCreated is null
-                });
-              }
-            });
-          } else {
-            responseData.subscriptions.push({
-              id: subscriptionWithInvoice.subscriptionId,
-              created_at: new Date(subscriptionWithInvoice.subscriptionCreated * 1000).toISOString(), // ✅ Use correct subscription timestamp
-            });
-
-            if (subscriptionWithInvoice.invoiceId && subscriptionWithInvoice.invoiceCreated !== null) {
-              responseData.invoices.push({
-                id: subscriptionWithInvoice.invoiceId,
-                created_at: new Date(subscriptionWithInvoice.invoiceCreated * 1000).toISOString(), // ✅ Safe conversion
-              });
-            } else if (subscriptionWithInvoice.invoiceId) {
-              responseData.invoices.push({
-                id: subscriptionWithInvoice.invoiceId,
-                created_at: "", // ✅ Handle null timestamp gracefully
-              });
-            }
-
-          }
-
-
-        } else {
-          console.error(
-            `❌ Failed to create subscription with invoice for Customer ${customerId}`
-          );
-        }
-      }
-
-      // ✅ Handle Case Where No Stripe Products Exist
-      if (products.length == 0) {
-        console.log(
-          `📩 No Stripe products found for ${customerId}. Creating a manual invoice for ${amount}...`
-        );
-        const manualInvoice = await createManualInvoice(
-          customerId,
-          amount,
-          stripeAccessToken,
-          dealId
-        );
-        if (manualInvoice) {
-          console.log(
-            `📩 Manual invoice created for Customer ${customerId}: ${manualInvoice.id}`
-          );
-          responseData.invoices.push({
-            id: manualInvoice.id,
-            created_at: new Date().toISOString(), // ✅ Store UTC time
-          });
-        } else {
-          console.error(
-            `❌ Failed to create manual invoice for Customer ${customerId}`
-          );
-        }
-      }
-    }
-
-    // ✅ Return all collected invoice and subscription IDs
-    return responseData;
-  } catch (error) {
-    console.error("❌ Error processing Stripe payments:", error);
-    return null;
-  }
-};
 // const processStripePayments = async (dealData, stripeAccessToken) => {
 //   try {
 //     console.log(
@@ -2217,7 +2396,6 @@ const processStripePayments = async (dealData, stripeAccessToken) => {
 //   }
 // };
 
-
 // const createManualInvoice = async (
 //   customerId,
 //   amount,
@@ -2271,6 +2449,151 @@ const processStripePayments = async (dealData, stripeAccessToken) => {
 //   }
 // };
 
+
+
+const processStripePayments = async (
+  dealData: {
+    dealId: string;
+    customer: string[];
+    products?: {
+      stripeProductId: string;
+      stripePriceId: string;
+      type: string;
+      interval?: string;
+      interval_count?: number;
+      quantity: number;
+    }[];
+    amount: number;
+  },
+  stripeAccessToken: string
+): Promise<{
+  dealId: string;
+  invoices: { id: string; created_at: string }[];
+  subscriptions: { id: string; created_at: string }[];
+  amount: number;
+} | null> => {
+  try {
+    console.log("🔹 Processing Stripe Payments:", JSON.stringify(dealData, null, 2));
+
+    const { dealId, customer, products = [], amount } = dealData;
+
+    const responseData = {
+      dealId: dealId,
+      invoices: [] as { id: string; created_at: string }[],
+      subscriptions: [] as { id: string; created_at: string }[],
+      amount: amount,
+    };
+
+    for (const customerId of customer) {
+      console.log(`✅ Processing for Customer: ${customerId}`);
+
+      if (products.length === 0) {
+        console.log(
+          `📩 No Stripe products found for ${customerId}. Creating a manual invoice for ${amount}...`
+        );
+        const manualInvoice = await createManualInvoice(
+          customerId,
+          amount,
+          stripeAccessToken,
+          dealId
+        );
+        if (manualInvoice) {
+          console.log(`📩 Manual invoice created for Customer ${customerId}: ${manualInvoice.id}`);
+          responseData.invoices.push({
+            id: manualInvoice.id,
+            created_at: new Date(manualInvoice.created * 1000).toISOString(),
+          });
+          return responseData;
+        } else {
+          console.error(`❌ Failed to create manual invoice for Customer ${customerId}`);
+        }
+      }
+
+      const oneTimeProducts = products
+        .filter((product) => product.type === "one_time")
+        .map((product) => ({
+          ...product,
+          interval: product.interval || "month", // ✅ Provide default interval
+          interval_count: product.interval_count ?? 1, // ✅ Provide default interval_count
+        }));
+
+      const recurringOrUsageBasedProducts = products
+        .filter((product) => product.type === "recurring" || product.type === "usage_based")
+        .map((product) => ({
+          ...product,
+          interval: product.interval || "month", // ✅ Ensure interval is always defined
+          interval_count: product.interval_count ?? 1, // ✅ Ensure interval_count is always defined
+        }));
+
+      if (oneTimeProducts.length > 0) {
+        console.log(`💰 Customer ${customerId} has one-time products. Creating invoice...`);
+        const invoice = await createStripeInvoice(
+          customerId,
+          oneTimeProducts,
+          stripeAccessToken,
+          dealId
+        );
+        if (invoice) {
+          console.log(`📩 Invoice created for Customer ${customerId}: ${invoice.id}`);
+          responseData.invoices.push({
+            id: invoice.id,
+            created_at: new Date(invoice.created * 1000).toISOString(),
+          });
+        } else {
+          console.error(`❌ Failed to create invoice for Customer ${customerId}`);
+        }
+      }
+
+      if (recurringOrUsageBasedProducts.length > 0) {
+        console.log(`🔄 Customer ${customerId} has recurring or usage-based products.`);
+
+        const hasPayment = await hasPaymentMethod(customerId, stripeAccessToken);
+        const subscriptionWithInvoice = await createSubscriptionWithInvoiceCombined(
+          customerId,
+          recurringOrUsageBasedProducts,
+          stripeAccessToken,
+          dealId
+        );
+
+        if (subscriptionWithInvoice.length > 0) {
+          console.log(`📩 Subscription with invoice created for Customer ${customerId}`);
+
+          subscriptionWithInvoice.forEach((sub) => {
+            responseData.subscriptions.push({
+              id: sub.subscriptionId,
+              created_at: new Date(sub.subscriptionCreated * 1000).toISOString(),
+            });
+
+            if (sub.invoiceId && sub.invoiceCreated !== null) {
+              responseData.invoices.push({
+                id: sub.invoiceId,
+                created_at: new Date(sub.invoiceCreated * 1000).toISOString(),
+              });
+            } else if (sub.invoiceId) {
+              responseData.invoices.push({
+                id: sub.invoiceId,
+                created_at: "",
+              });
+            }
+          });
+        } else {
+          console.error(`❌ Failed to create subscription with invoice for Customer ${customerId}`);
+        }
+      }
+    }
+
+    return responseData;
+  } catch (error) {
+    console.error("❌ Error processing Stripe payments:", error);
+    return null;
+  }
+};
+
+
+
+
+
+
 const createManualInvoice = async (
   customerId,
   amount,
@@ -2306,7 +2629,9 @@ const createManualInvoice = async (
     await stripe.invoices.update(invoice.id, {
       metadata: { deal_id: dealId, customer: customerId },
     });
-    console.log(`📄 Invoice item created: ${invoiceItem.id} and linked to invoice: ${invoice.id}`);
+    console.log(
+      `📄 Invoice item created: ${invoiceItem.id} and linked to invoice: ${invoice.id}`
+    );
 
     console.log("Fetching invoice before finalizing...");
     let retrievedInvoice = await stripe.invoices.retrieve(invoice.id);
@@ -2316,7 +2641,10 @@ const createManualInvoice = async (
       console.log("⚠️ Invoice items not found, waiting before retrying...");
       await new Promise((resolve) => setTimeout(resolve, 3000)); // Small delay
       retrievedInvoice = await stripe.invoices.retrieve(invoice.id);
-      console.log(`📜 Retried Invoice Line Items:`, retrievedInvoice.lines.data);
+      console.log(
+        `📜 Retried Invoice Line Items:`,
+        retrievedInvoice.lines.data
+      );
     }
 
     console.log("Finalizing invoice...");
@@ -2424,7 +2752,6 @@ const hasPaymentMethod = async (customerId, stripeAccessToken) => {
 //   }
 // };
 
-
 const createStripeInvoice = async (
   customerId,
   products,
@@ -2450,7 +2777,9 @@ const createStripeInvoice = async (
     // ✅ Step 2: Now Create Invoice Items and Attach to the Invoice
     for (const product of products) {
       if (product.type === "one_time" || product.type === "recurring") {
-        console.log(`🛒 Adding Product to Invoice - Price ID: ${product.stripePriceId}, Quantity: ${product.quantity}`);
+        console.log(
+          `🛒 Adding Product to Invoice - Price ID: ${product.stripePriceId}, Quantity: ${product.quantity}`
+        );
 
         const invoiceItem = await stripe.invoiceItems.create({
           customer: customerId,
@@ -2463,7 +2792,9 @@ const createStripeInvoice = async (
           },
         });
 
-        console.log(`✅ Invoice Item Created: ${invoiceItem.id} | Amount: ${invoiceItem.amount} | Invoice ID: ${invoiceItem.invoice}`);
+        console.log(
+          `✅ Invoice Item Created: ${invoiceItem.id} | Amount: ${invoiceItem.amount} | Invoice ID: ${invoiceItem.invoice}`
+        );
         invoiceItems.push(invoiceItem);
       } else {
         console.log("⚠️ Product type not found");
@@ -2482,11 +2813,16 @@ const createStripeInvoice = async (
 
     // ✅ Step 4: Finalize the Invoice AFTER Attaching Items
     const finalizedInvoice = await stripe.invoices.finalizeInvoice(invoice.id);
-    console.log(`📨 Invoice Finalized with Total: ${finalizedInvoice.total} | Status: ${finalizedInvoice.status}`);
+    console.log(
+      `📨 Invoice Finalized with Total: ${finalizedInvoice.total} | Status: ${finalizedInvoice.status}`
+    );
 
     return finalizedInvoice; // ✅ Return the finalized invoice
   } catch (error) {
-    console.error(`❌ Error creating invoice for customer ${customerId}:`, error);
+    console.error(
+      `❌ Error creating invoice for customer ${customerId}:`,
+      error
+    );
     return null;
   }
 };
@@ -2530,7 +2866,7 @@ const createStripeUsageBasedSubscription = async (
     );
     return null;
   }
-}
+};
 
 const createSubscriptionWithInvoiceUsageBased = async (
   customerId,
@@ -2542,24 +2878,29 @@ const createSubscriptionWithInvoiceUsageBased = async (
     console.log("inside createSubscriptionWithInvoiceUsageBased");
     const stripe = stripeInstance(stripeAccessToken);
 
-    const groupedProducts: Record<
-      string,
-      Stripe.SubscriptionCreateParams.Item[]
-    > = products
-      .filter((product) => product.type === "usage_based")
-      .reduce((groups, product) => {
-        const key = `${product.interval}-${product.interval_count}`;
-
-        if (!groups[key]) {
-          groups[key] = [];
-        }
-
+    const groupedProducts: Record<string, Stripe.SubscriptionCreateParams.Item[]> = products
+    .filter((product) => product.type === "usage_based")
+    .reduce((groups, product) => {
+      const key = `${product.interval}-${product.interval_count}`;
+  
+      if (!groups[key]) {
+        groups[key] = [];
+      }
+  
+      // Handle multiple prices
+      const priceIds = product.stripePriceId.includes(",") 
+        ? product.stripePriceId.split(",").map(price => price.trim()) 
+        : [product.stripePriceId];
+  
+      priceIds.forEach(priceId => {
         groups[key].push({
-          price: product.stripePriceId,
-          // quantity: product.quantity || 1,
+          price: priceId,
         });
-        return groups;
-      }, {} as Record<string, Stripe.SubscriptionCreateParams.Item[]>);
+      });
+  
+      return groups;
+    }, {} as Record<string, Stripe.SubscriptionCreateParams.Item[]>);
+  
 
     console.log("🚀 => groupedProducts:", groupedProducts);
 
@@ -2596,7 +2937,7 @@ const createSubscriptionWithInvoiceUsageBased = async (
       const subscriptionCreated = subscription.created;
 
       // ✅ Extract Invoice ID and Created Timestamp
-      let invoiceId: string | null = null;
+      let invoiceId: string | null | undefined = null;
       let invoiceCreated: number | null = null;
 
       if (typeof subscription.latest_invoice === "string") {
@@ -2617,7 +2958,6 @@ const createSubscriptionWithInvoiceUsageBased = async (
           metadata: {
             deal_id: dealId,
             subscription_id: subscription.id,
-
           },
         });
 
@@ -2656,6 +2996,406 @@ const createSubscriptionWithInvoiceUsageBased = async (
     return null;
   }
 };
+
+
+
+// const createSubscriptionWithInvoiceCombined = async (
+//   customerId: string,
+//   products: {
+//     stripeProductId: string;
+//     stripePriceId: string;
+//     type: string;
+//     interval: string;
+//     interval_count: number;
+//     quantity: number;
+//   }[],
+//   stripeAccessToken: string,
+//   dealId: string
+// ): Promise<
+//   {
+//     subscriptionId: string;
+//     subscriptionCreated: number;
+//     invoiceId: string | null;
+//     invoiceCreated: number | null;
+//   }[]
+// > => {
+//   try {
+//     console.log("inside createSubscriptionWithInvoiceCombined");
+//     const stripe = stripeInstance(stripeAccessToken);
+
+//     const groupedProducts: Record<string, Stripe.SubscriptionCreateParams.Item[]> =
+//       products.reduce((groups, product) => {
+//         const key = `${product.interval}-${product.interval_count}`;
+//         if (!groups[key]) {
+//           groups[key] = [];
+//         }
+//         const priceIds = product.stripePriceId.includes(",")
+//           ? product.stripePriceId.split(",").map((price) => price.trim())
+//           : [product.stripePriceId];
+
+//         priceIds.forEach((priceId) => {
+//           groups[key].push({
+//             price: priceId,
+//             quantity: product.quantity,
+//           });
+//         });
+
+//         return groups;
+//       }, {} as Record<string, Stripe.SubscriptionCreateParams.Item[]>);
+
+//     console.log("🚀 Grouped Products:", groupedProducts);
+
+//     const createdSubscriptions: {
+//       subscriptionId: string;
+//       subscriptionCreated: number;
+//       invoiceId: string | null;
+//       invoiceCreated: number | null;
+//     }[] = [];
+
+//     for (const [interval, subscriptionItems] of Object.entries(groupedProducts)) {
+//       console.log(`🔄 Creating subscription for billing interval: ${interval}`);
+
+//       const subscription = await stripe.subscriptions.create({
+//         customer: customerId,
+//         items: subscriptionItems,
+//         collection_method: "send_invoice",
+//         days_until_due: 7,
+//         expand: ["latest_invoice.payment_intent"],
+//         metadata: {
+//           deal_id: dealId,
+//           billing_interval: interval,
+//           created_by: "HubSpot Integration",
+//         },
+//       });
+
+//       console.log(
+//         `📩 Subscription created for customer ${customerId}: ${subscription.id}`
+//       );
+
+//       const subscriptionCreated = subscription.created;
+//       let invoiceId: string | null = null;
+//       let invoiceCreated: number | null = null;
+
+//       if (typeof subscription.latest_invoice === "string") {
+//         invoiceId = subscription.latest_invoice;
+//       } else if (subscription.latest_invoice && "id" in subscription.latest_invoice) {
+//         invoiceId = subscription.latest_invoice.id;
+//         invoiceCreated = subscription.latest_invoice.created;
+//       }
+
+//       if (invoiceId) {
+//         console.log(`📩 Updating invoice ${invoiceId} with metadata...`);
+
+//         await stripe.invoices.update(invoiceId, {
+//           metadata: {
+//             deal_id: dealId,
+//             subscription_id: subscription.id,
+//           },
+//         });
+
+//         const finalizedInvoice = await stripe.invoices.finalizeInvoice(invoiceId);
+
+//         console.log(`📨 Invoice finalized and sent: ${finalizedInvoice.id}`);
+
+//         invoiceCreated = finalizedInvoice.created;
+//       } else {
+//         console.warn(`⚠️ No invoice found for subscription: ${subscription.id}`);
+//       }
+
+//       createdSubscriptions.push({
+//         subscriptionId: subscription.id,
+//         subscriptionCreated,
+//         invoiceId,
+//         invoiceCreated,
+//       });
+//     }
+
+//     return createdSubscriptions;
+//   } catch (error) {
+//     console.error(
+//       `❌ Error creating subscription with invoice for customer ${customerId}:`,
+//       error
+//     );
+//     return [];
+//   }
+// };
+
+
+// const createSubscriptionWithInvoiceCombined = async (
+//   customerId: string,
+//   products: {
+//     stripeProductId: string;
+//     stripePriceId: string;
+//     type: string;
+//     interval: string;
+//     interval_count: number;
+//     quantity: number;
+//   }[],
+//   stripeAccessToken: string,
+//   dealId: string
+// ): Promise<
+//   {
+//     subscriptionId: string;
+//     subscriptionCreated: number;
+//     invoiceId: string | null;
+//     invoiceCreated: number | null;
+//   }[]
+// > => {
+//   try {
+//     console.log("inside createSubscriptionWithInvoiceCombined");
+//     const stripe = stripeInstance(stripeAccessToken);
+
+//     const groupedProducts: Record<string, Stripe.SubscriptionCreateParams.Item[]> =
+//       products.reduce((groups, product) => {
+//         const key = `${product.interval}-${product.interval_count}`;
+//         if (!groups[key]) {
+//           groups[key] = [];
+//         }
+//         const priceIds = product.stripePriceId.includes(",")
+//           ? product.stripePriceId.split(",").map((price) => price.trim())
+//           : [product.stripePriceId];
+
+//         priceIds.forEach((priceId) => {
+//           // ✅ If the product is NOT usage-based, add quantity
+//           const subscriptionItem: Stripe.SubscriptionCreateParams.Item = { price: priceId };
+
+//           if (product.type !== "usage_based") {
+//             subscriptionItem.quantity = product.quantity; // ✅ Add quantity only for non-metered plans
+//           }
+
+//           groups[key].push(subscriptionItem);
+//         });
+
+//         return groups;
+//       }, {} as Record<string, Stripe.SubscriptionCreateParams.Item[]>);
+
+//     console.log("🚀 Grouped Products:", JSON.stringify(groupedProducts, null, 2));
+
+//     const createdSubscriptions: {
+//       subscriptionId: string;
+//       subscriptionCreated: number;
+//       invoiceId: string | null;
+//       invoiceCreated: number | null;
+//     }[] = [];
+
+//     for (const [interval, subscriptionItems] of Object.entries(groupedProducts)) {
+//       console.log(`🔄 Creating subscription for billing interval: ${interval}`);
+
+//       const subscription = await stripe.subscriptions.create({
+//         customer: customerId,
+//         items: subscriptionItems,
+//         collection_method: "send_invoice",
+//         days_until_due: 7,
+//         expand: ["latest_invoice.payment_intent"],
+//         metadata: {
+//           deal_id: dealId,
+//           billing_interval: interval,
+//           created_by: "HubSpot Integration",
+//         },
+//       });
+
+//       console.log(
+//         `📩 Subscription created for customer ${customerId}: ${subscription.id}`
+//       );
+
+//       const subscriptionCreated = subscription.created;
+//       let invoiceId: string | null = null;
+//       let invoiceCreated: number | null = null;
+
+//       if (typeof subscription.latest_invoice === "string") {
+//         invoiceId = subscription.latest_invoice;
+//       } else if (subscription.latest_invoice && "id" in subscription.latest_invoice) {
+//         invoiceId = subscription.latest_invoice.id;
+//         invoiceCreated = subscription.latest_invoice.created;
+//       }
+
+//       if (invoiceId) {
+//         console.log(`📩 Updating invoice ${invoiceId} with metadata...`);
+
+//         await stripe.invoices.update(invoiceId, {
+//           metadata: {
+//             deal_id: dealId,
+//             subscription_id: subscription.id,
+//           },
+//         });
+
+//         const finalizedInvoice = await stripe.invoices.finalizeInvoice(invoiceId);
+
+//         console.log(`📨 Invoice finalized and sent: ${finalizedInvoice.id}`);
+
+//         invoiceCreated = finalizedInvoice.created;
+//       } else {
+//         console.warn(`⚠️ No invoice found for subscription: ${subscription.id}`);
+//       }
+
+//       createdSubscriptions.push({
+//         subscriptionId: subscription.id,
+//         subscriptionCreated,
+//         invoiceId,
+//         invoiceCreated,
+//       });
+//     }
+
+//     return createdSubscriptions;
+//   } catch (error) {
+//     console.error(
+//       `❌ Error creating subscription with invoice for customer ${customerId}:`,
+//       error
+//     );
+//     return [];
+//   }
+// };
+
+
+const createSubscriptionWithInvoiceCombined = async (
+  customerId: string,
+  products: {
+    stripeProductId: string;
+    stripePriceId: string;
+    type: string;
+    interval: string;
+    interval_count: number;
+    quantity: number;
+  }[],
+  stripeAccessToken: string,
+  dealId: string
+): Promise<
+  {
+    subscriptionId: string;
+    subscriptionCreated: number;
+    invoiceId: string | null;
+    invoiceCreated: number | null;
+  }[]
+> => {
+  try {
+    console.log("inside createSubscriptionWithInvoiceCombined");
+    const stripe = stripeInstance(stripeAccessToken);
+
+    // 🚀 Step 1: Group products properly to prevent duplicate subscriptions
+    const groupedProducts: Record<string, Stripe.SubscriptionCreateParams.Item[]> =
+      products.reduce((groups, product) => {
+        const key = `${product.interval}-${product.interval_count}`;
+        if (!groups[key]) {
+          groups[key] = [];
+        }
+
+        // ✅ Ensure multiple price IDs are handled in the same subscription
+        const priceIds = product.stripePriceId.includes(",")
+          ? product.stripePriceId.split(",").map((price) => price.trim())
+          : [product.stripePriceId];
+
+        priceIds.forEach((priceId) => {
+          const subscriptionItem: Stripe.SubscriptionCreateParams.Item = { price: priceId };
+
+          if (product.type !== "usage_based") {
+            subscriptionItem.quantity = product.quantity; // ✅ Only for non-metered plans
+          }
+
+          groups[key].push(subscriptionItem);
+        });
+
+        return groups;
+      }, {} as Record<string, Stripe.SubscriptionCreateParams.Item[]>);
+
+    console.log("🚀 Grouped Products:", JSON.stringify(groupedProducts, null, 2));
+
+    const createdSubscriptions: {
+      subscriptionId: string;
+      subscriptionCreated: number;
+      invoiceId: string | null;
+      invoiceCreated: number | null;
+    }[] = [];
+
+    // 🚀 Step 2: Check if a subscription already exists before creating a new one
+    for (const [interval, subscriptionItems] of Object.entries(groupedProducts)) {
+      console.log(`🔄 Creating subscription for billing interval: ${interval}`);
+      console.log("Here is the customer ID  "+ customerId);
+      // ⚠️ Add validation to check existing subscriptions before creating a new one
+      const existingSubscriptions = await stripe.subscriptions.list({
+        customer: customerId,
+        status: "active",
+      });
+
+      // console.log("Existing Subscriptions: ", JSON.stringify(existingSubscriptions));
+      // ✅ If a subscription with the same interval already exists, skip creating a new one
+      const existingSubscription = existingSubscriptions.data.find((sub) => {
+        return sub.metadata.deal_id === dealId && sub.metadata.billing_interval === interval;
+      });
+
+      if (existingSubscription) {
+        console.warn(`⚠️ Subscription already exists for ${customerId} and interval ${interval}, skipping...`);
+        continue;
+      }
+      else{
+        console.log("No existing subscription found");
+      }
+
+      // ✅ Now create a new subscription only if it doesn't already exist
+      const subscription = await stripe.subscriptions.create({
+        customer: customerId,
+        items: subscriptionItems,
+        collection_method: "send_invoice",
+        days_until_due: 7,
+        expand: ["latest_invoice.payment_intent"],
+        metadata: {
+          deal_id: dealId,
+          billing_interval: interval,
+          created_by: "HubSpot Integration",
+        },
+      });
+
+      console.log(
+        `📩 Subscription created for customer ${customerId}: ${subscription.id}`
+      );
+
+      const subscriptionCreated = subscription.created;
+      let invoiceId: string | null = null;
+      let invoiceCreated: number | null = null;
+
+      if (typeof subscription.latest_invoice === "string") {
+        invoiceId = subscription.latest_invoice;
+      } else if (subscription.latest_invoice && "id" in subscription.latest_invoice) {
+        invoiceId = subscription.latest_invoice.id;
+        invoiceCreated = subscription.latest_invoice.created;
+      }
+
+      if (invoiceId) {
+        console.log(`📩 Updating invoice ${invoiceId} with metadata...`);
+
+        await stripe.invoices.update(invoiceId, {
+          metadata: {
+            deal_id: dealId,
+            subscription_id: subscription.id,
+          },
+        });
+
+        const finalizedInvoice = await stripe.invoices.finalizeInvoice(invoiceId);
+
+        console.log(`📨 Invoice finalized and sent: ${finalizedInvoice.id}`);
+
+        invoiceCreated = finalizedInvoice.created;
+      } else {
+        console.warn(`⚠️ No invoice found for subscription: ${subscription.id}`);
+      }
+
+      createdSubscriptions.push({
+        subscriptionId: subscription.id,
+        subscriptionCreated,
+        invoiceId,
+        invoiceCreated,
+      });
+    }
+
+    return createdSubscriptions;
+  } catch (error) {
+    console.error(
+      `❌ Error creating subscription with invoice for customer ${customerId}:`,
+      error
+    );
+    return [];
+  }
+};
+
 
 const createStripeSubscription = async (
   customerId,
@@ -2707,7 +3447,9 @@ const updateStripeSubscriptionWithUsage = async (
 
     const stripe = stripeInstance(stripeAccessToken);
 
-    const subscriptionItem = await stripe.subscriptions.retrieve(subscriptionId);
+    const subscriptionItem = await stripe.subscriptions.retrieve(
+      subscriptionId
+    );
     console.log("🚀 => subscriptionItem:", JSON.stringify(subscriptionItem));
 
     // ✅ Step 1: Check if Subscription Item is valid
@@ -2718,7 +3460,11 @@ const updateStripeSubscriptionWithUsage = async (
 
     const subscriptionItemId = subscriptionItem.items.data[0].id;
     // remove _meter and add _event in last
-    const meterName = subscriptionItem.items.data[0].price.metadata.meterName.replace("_meter", "_event");
+    const meterName =
+      subscriptionItem.items.data[0].price.metadata.meterName.replace(
+        "_meter",
+        "_event"
+      );
 
     // ✅ Step 2: Create Usage Record
     const usageRecord = await stripe.billing.meterEvents.create({
@@ -2740,7 +3486,6 @@ const updateStripeSubscriptionWithUsage = async (
     return null;
   }
 };
-
 
 // const createSubscriptionWithInvoice = async (
 //   customerId,
@@ -2943,7 +3688,7 @@ const createSubscriptionWithInvoice = async (
       const subscriptionCreated = subscription.created;
 
       // ✅ Extract Invoice ID and Created Timestamp
-      let invoiceId: string | null = null;
+      let invoiceId: string | null | undefined = null;
       let invoiceCreated: number | null = null;
 
       if (typeof subscription.latest_invoice === "string") {
@@ -2964,7 +3709,6 @@ const createSubscriptionWithInvoice = async (
           metadata: {
             deal_id: dealId,
             subscription_id: subscription.id,
-
           },
         });
 
@@ -3003,9 +3747,6 @@ const createSubscriptionWithInvoice = async (
     return null;
   }
 };
-
-
-
 
 // const createSubscriptionWithInvoice = async (
 //   customerId,
@@ -3489,5 +4230,5 @@ export {
   createUsageBasedProductPerUnit,
   createUsageBasedProductPerPackage,
   createUsageBasedProductPerTeir,
-  updateStripeSubscriptionWithUsage
+  updateStripeSubscriptionWithUsage,
 };

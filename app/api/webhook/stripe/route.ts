@@ -52,7 +52,7 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ error: `Webhook Error: ${err.message}` }, { status: 400 });
         }
 
-        console.log("🔔 Stripe Webhook Event Received:", JSON.stringify(event, null, 2));
+        // console.log("🔔 Stripe Webhook Event Received:", JSON.stringify(event, null, 2));
 
         // ✅ Use `event.data.object` instead of parsing request.json()
         const eventData = event.data.object;

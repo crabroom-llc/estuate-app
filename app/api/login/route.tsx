@@ -8,6 +8,7 @@ export async function POST(request: Request) {
     try {
         const data = await request.json();
         console.log(data.email);
+        console.log(process.env.MYSQL_HOST)
         // Check if the user exists
         const users = await query("SELECT * FROM users WHERE email = ?", [data.email]) as any[];
         console.log(users);
