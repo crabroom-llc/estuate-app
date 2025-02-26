@@ -435,6 +435,31 @@ const createUsageBasedProductPerUnit = async (
       apiVersion: "2023-10-16" as Stripe.LatestApiVersion,
     });
 
+
+     // 🔹 Retrieve last 10 products from Stripe
+     const existingProducts = await stripe.products.list({
+      limit: 10,
+      active: true,
+    });
+
+    // 🔍 Check if a product with the same metadata exists
+    const existingProduct = existingProducts.data.find((product) => {
+      return (
+        product.metadata.hubspot_created_at === createdate &&
+        product.metadata.hubspot_product_id === id &&
+        product.metadata.pricing_model === billing_type &&
+        product.metadata.usage_type === usage_model
+      );
+    });
+
+    if (existingProduct) {
+      console.log("⚠️ Product already exists in Stripe. Skipping creation.");
+      return { productId: existingProduct.id, priceId: null };
+    }
+    else{
+      console.log("no match found!");
+    }
+
     // 🔹 Step 1: Create the Product in Stripe
     const stripeProduct = await stripe.products.create({
       name,
@@ -2483,6 +2508,10 @@ const processStripePayments = async (
       subscriptions: [] as { id: string; created_at: string }[],
       amount: amount,
     };
+    if(customer.length==0){
+      console.log("No customer found");
+      return null;
+    }
 
     for (const customerId of customer) {
       console.log(`✅ Processing for Customer: ${customerId}`);
@@ -3314,11 +3343,14 @@ const createSubscriptionWithInvoiceCombined = async (
       const existingSubscriptions = await stripe.subscriptions.list({
         customer: customerId,
         status: "active",
+        limit:10,
       });
 
       // console.log("Existing Subscriptions: ", JSON.stringify(existingSubscriptions));
       // ✅ If a subscription with the same interval already exists, skip creating a new one
       const existingSubscription = existingSubscriptions.data.find((sub) => {
+        console.log("Here is the sub metadata  "+ sub.metadata.deal_id);
+        console.log("Here is the deal ID  "+ dealId);
         return sub.metadata.deal_id === dealId && sub.metadata.billing_interval === interval;
       });
 
@@ -3341,8 +3373,24 @@ const createSubscriptionWithInvoiceCombined = async (
           deal_id: dealId,
           billing_interval: interval,
           created_by: "HubSpot Integration",
+
         },
       });
+
+
+      // const subscription = await stripe.subscriptions.create({
+      //   customer: customerId,
+      //   items: subscriptionItems,
+      //   collection_method: "send_invoice",
+      //   days_until_due: 7,
+      //   expand: ["latest_invoice.payment_intent"],
+      //   metadata: {
+      //     deal_id: dealId,
+      //     billing_interval: interval,
+      //     created_by: "HubSpot Integration",
+
+      //   },
+      // });
 
       console.log(
         `📩 Subscription created for customer ${customerId}: ${subscription.id}`

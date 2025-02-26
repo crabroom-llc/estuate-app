@@ -73,8 +73,8 @@ const productCreated = async (portalId, object, query) => {
                         return;
                     }
                     const stripeProductId = stripeProductResponse.productId;
-                    const stripePriceId = stripeProductResponse.priceId;
-                    const stripeMeteredId = stripeProductResponse.meterId;
+                    const stripePriceId = stripeProductResponse.priceId || "";
+                    const stripeMeteredId = stripeProductResponse.meterId || "";
 
                     const updatedProduct = await updateHubSpotProduct(
                         object.id,

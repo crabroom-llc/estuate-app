@@ -16,6 +16,7 @@ import { productUpdate } from "@/components/stripeWebhookActivities/product/prod
 import Stripe from "stripe";
 
 
+
 export async function POST(request: NextRequest) {
     try {
         const stripeSecretKey = process.env.STRIPE_CLIENT_SECRET;
@@ -135,10 +136,12 @@ async function processWebhookEvents(event: any, query:(sql: string, params?: any
                 case "invoice.paid":
                     console.log("✅ Invoice Paid Event Detected!");
                     await invoicePaid(accountId, objectId, query);
+                    
                     break;
                 case "invoice.created":
                     console.log("✅ Invoice Paid Event Detected!");
                     await invoiceCreated(accountId, objectId, query);
+                    
                     break;
 
                 case "customer.updated":
@@ -150,6 +153,7 @@ async function processWebhookEvents(event: any, query:(sql: string, params?: any
                             await companyUpdate(event.data, accountId, objectId, query);
                         }
                     }
+                    
                     break;
 
                 case "product.updated":
@@ -157,30 +161,36 @@ async function processWebhookEvents(event: any, query:(sql: string, params?: any
                     if (event.data.object.metadata.deleted == "false") {
                         await productUpdate(event.data, accountId, objectId, query);
                     }
+                    
                     break;
 
                 case "product.creation":
                     console.log("✅ Product Created Event Detected!");
                     // await productCreated(accountId, objectId);
+                    
                     break;
                 case "product.propertyChange":
                     console.log("✅ Product Created Event Detected!");
                     // await productUpdated(accountId, objectId, propertyName, propertyValue);
+                    
                     break;
 
                 case "product.deletion":
                     console.log("🗑️ Product Deleted Event Detected!");
                     // await productDeleted(accountId, objectId);
+                    
                     break;
 
                 case "company.creation":
                     console.log("✅ Company Created Event Detected!");
                     // await companyCreated(accountId, objectId);
+                    
                     break;
 
                 case "company.deletion":
                     console.log("🗑️ Company Deleted Event Detected!");
                     // await companyDeleted(accountId, objectId);
+                    
                     break;
 
                 case "company.propertyChange":
@@ -191,11 +201,13 @@ async function processWebhookEvents(event: any, query:(sql: string, params?: any
                     //   propertyName,
                     //   propertyValue
                     // );
+                    
                     break;
 
                 default:
                     console.warn("⚠️ Unknown Event Type:", subscriptionType);
 
+                    
                     break;
             }
         } catch (eventError) {

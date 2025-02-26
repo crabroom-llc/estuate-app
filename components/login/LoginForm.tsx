@@ -34,7 +34,7 @@ const LoginForm = () => {
             }); // remove token from the response
             setLoading(false);
             // message.success('User logged in successfully', 5);
-            window.location.href = '/dashboard';
+            window.location.href = '/authorize';
         } catch (error) {
             setLoading(false);
             console.log(error);

@@ -13,6 +13,7 @@ import { companyUpdated } from "@/components/hubspotWebhookActivities/company/co
 import { companyDeleted } from "@/components/hubspotWebhookActivities/company/companyDeleted";
 import { productDeleted } from "@/components/hubspotWebhookActivities/product/productDeleted";
 import { Json } from "sequelize/types/utils";
+import {clearlogs} from "@/utils/restartServer";
 
 const CLIENT_SECRET = process.env.HUBSPOT_CLIENT_SECRET || "";
 
@@ -49,47 +50,47 @@ export async function POST(request: NextRequest) {
     const url = new URL(request.url);
     const uri = `${url.origin}${url.pathname}`;
 
-    // // 🔹 Validate the request signature
-    // let isValid = false;
-    // if (signatureVersion === "v1") {
-    //   isValid = validateSignatureV1(signature, rawBody);
-    // } else if (signatureVersion === "v2") {
-    //   isValid = validateSignatureV2(signature, method, uri, rawBody);
-    // } else if (signatureVersion === "v3") {
-    //   if (!timestamp) {
-    //     console.error(
-    //       "❌ Missing X-HubSpot-Request-Timestamp for v3 validation"
-    //     );
-    //     return NextResponse.json(
-    //       { message: "Unauthorized request" },
-    //       { status: 400 }
-    //     );
-    //   }
-    //   isValid = validateSignatureV3(
-    //     signatureV3,
-    //     method,
-    //     uri,
-    //     rawBody,
-    //     timestamp
-    //   );
-    // } else {
-    //   console.error(
-    //     "❌ Unknown X-HubSpot-Signature-Version:",
-    //     signatureVersion
-    //   );
-    //   return NextResponse.json(
-    //     { message: "Unauthorized request" },
-    //     { status: 400 }
-    //   );
-    // }
+    // 🔹 Validate the request signature
+    let isValid = false;
+    if (signatureVersion === "v1") {
+      isValid = validateSignatureV1(signature, rawBody);
+    } else if (signatureVersion === "v2") {
+      isValid = validateSignatureV2(signature, method, uri, rawBody);
+    } else if (signatureVersion === "v3") {
+      if (!timestamp) {
+        console.error(
+          "❌ Missing X-HubSpot-Request-Timestamp for v3 validation"
+        );
+        return NextResponse.json(
+          { message: "Unauthorized request" },
+          { status: 400 }
+        );
+      }
+      isValid = validateSignatureV3(
+        signatureV3,
+        method,
+        uri,
+        rawBody,
+        timestamp
+      );
+    } else {
+      console.error(
+        "❌ Unknown X-HubSpot-Signature-Version:",
+        signatureVersion
+      );
+      return NextResponse.json(
+        { message: "Unauthorized request" },
+        { status: 400 }
+      );
+    }
 
-    // if (!isValid) {
-    //   console.error("❌ Signature validation failed");
-    //   return NextResponse.json(
-    //     { message: "Unauthorized request" },
-    //     { status: 400 }
-    //   );
-    // }
+    if (!isValid) {
+      console.error("❌ Signature validation failed");
+      return NextResponse.json(
+        { message: "Unauthorized request" },
+        { status: 400 }
+      );
+    }
 
     console.log("✅ HubSpot request signature validated successfully");
 
@@ -276,24 +277,28 @@ async function processWebhookEvents(parsedBody: any, query:(sql: string, params?
             console.log("✅ Contact Created Event Detected!");
             await contactCreated(portalId, objectId, query);
             processedObjects.add(objectId);
+            
             break;
 
           case "product.creation":
             console.log("✅ Product Created Event Detected!");
             await productCreated(portalId, objectId, query);
             processedObjects.add(objectId);
+            clearlogs();
             break;
 
           case "deal.creation":
             console.log("✅ Deal Created Event Detected!");
             await dealCreated(portalId, objectId, query);
             processedObjects.add(objectId);
+           
             break;
 
           case "company.creation":
             console.log("✅ Company Created Event Detected!");
             await companyCreated(portalId, objectId, query);
             processedObjects.add(objectId);
+            clearlogs();
             break;
 
           case "contact.propertyChange":
@@ -329,6 +334,7 @@ async function processWebhookEvents(parsedBody: any, query:(sql: string, params?
               query
             );
             processedEvents.add(subscriptionType);
+            clearlogs();
             break;
 
           case "deal.propertyChange":

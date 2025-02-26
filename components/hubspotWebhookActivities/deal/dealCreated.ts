@@ -6,7 +6,8 @@ import {
 // import {processHubspotDealCreated} from "@/components/stripeActions/stripeActions";
 import { processStripePayments } from "@/components/stripeActions/stripeActions";
 import { Json } from "sequelize/types/utils";
-
+import { clearlogs } from "@utils/restartServer";
+const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 const dealCreated = async (portalId, objectId, query) => {
   try {
     const tokens = await getTokens(portalId, query);
@@ -18,12 +19,13 @@ const dealCreated = async (portalId, objectId, query) => {
 
     const { new_stripeAccessToken, new_hubspot_access_token } = tokens;
     // console.log("✅ Deal created successfully!", new_stripeAccessToken, new_hubspot_access_token);
-    const dealDataRaw = await fetchDealById(
-      objectId,
-      new_hubspot_access_token,
-      new_stripeAccessToken
-    );
+    const dealDataRaw = await (async () => {
+      console.log("⏳ Waiting for 2 seconds before fetching deal...");
+      await delay(2000); // 2-second delay
+      return fetchDealById(objectId, new_hubspot_access_token, new_stripeAccessToken);
+    })();
 
+    
     if (!dealDataRaw) {
       console.log(
         `❌ Deal stage is not in closed won. Current deal stage invalid.`
@@ -66,6 +68,8 @@ const dealCreated = async (portalId, objectId, query) => {
       dealData,
       new_stripeAccessToken
     );
+
+    console.log("✅ createSubcription:", createSubcription);
     if (createSubcription) {
       const { dealId, invoices, subscriptions, amount } = createSubcription;
       console.log("✅ Final Data:", {
@@ -82,6 +86,8 @@ const dealCreated = async (portalId, objectId, query) => {
         invoices,
         new_hubspot_access_token
       );
+
+
     } else {
       console.error(
         "❌ Error: processStripePayments returned null. Cannot update HubSpot."
@@ -89,6 +95,9 @@ const dealCreated = async (portalId, objectId, query) => {
     }
   } catch (error) {
     console.error("❌ Error in dealCreated:", error);
+  }
+  finally{
+    clearlogs();
   }
 };
 

@@ -55,6 +55,8 @@ const getStripeAccessTokenWebhook = async (
 
     const { updated_at, stripe_access_token: existingToken, stripe_expiry_time } = rows[0];
 
+    console.log(stripe_access_token);
+    console.log(existingToken);
     // Convert `updated_at` to a Date object
     let dbDate = new Date(stripe_expiry_time);
 

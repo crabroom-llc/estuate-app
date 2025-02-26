@@ -59,7 +59,7 @@ const HubSpotOnboardingContent = () => {
         </div>
       )}
       <div>
-        <Link href="/dashboard" className="text-blue-500 border border-blue-500 rounded-lg px-4 py-2">
+        <Link href="/authorize" className="text-blue-500 border border-blue-500 rounded-lg px-4 py-2">
           Go to Dashboard
         </Link>
       </div>
